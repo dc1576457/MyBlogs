@@ -13,8 +13,9 @@ import convertRoutes from "./routes/convertRoutes.js";
 
 const app = express();
 
+
 /* =========================================================
-   1. CORS (PATCH method added here)
+   1. CORS (With Expose Headers for Blobs)
 ========================================================= */
 app.use(
   cors({
@@ -23,21 +24,12 @@ app.use(
       "http://localhost:3000",
       "http://localhost:5174",
       "http://localhost:3001",
-       "https://my-blogs-beige.vercel.app",
+      "https://my-blogs-beige.vercel.app",
     ],
     credentials: true,
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
   })
 );
 
