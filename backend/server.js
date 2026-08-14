@@ -17,15 +17,26 @@ const app = express();
 /* =========================================================
    1. CORS (With Expose Headers for Blobs)
 ========================================================= */
+/* =========================================================
+   1. CORS
+========================================================= */
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5174",
+  "http://localhost:3001",
+  "https://my-blogs-beige.vercel.app",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:5174",
-      "http://localhost:3001",
-      "https://my-blogs-beige.vercel.app",
-    ],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith("vercel.app")) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
