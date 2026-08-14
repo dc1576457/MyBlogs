@@ -209,7 +209,7 @@ function Tools() {
 
       if (!response.data || !response.data.success) {
         throw new Error(
-          response.data?.message || "Unable to extract media information."
+          response.data?.message || "Unable to extract media details."
         );
       }
 
@@ -307,7 +307,7 @@ function Tools() {
         isPhoto,
       });
 
-      // Auto-trigger browser download prompt
+      // Automatically trigger browser download
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.setAttribute("download", filename);
@@ -362,7 +362,7 @@ function Tools() {
     <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
 
-      {/* HERO SECTION */}
+      {/* HERO */}
       <section className="relative pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">
           Download Videos & Media
@@ -393,7 +393,7 @@ function Tools() {
         </div>
       </section>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         {/* CATEGORY TABS */}
         <div className="flex items-center justify-center gap-2 overflow-x-auto pb-4 mb-10">
@@ -469,7 +469,7 @@ function Tools() {
         )}
       </main>
 
-      {/* MODAL POPUP */}
+      {/* MODAL */}
       {activeTool && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto"
@@ -520,7 +520,7 @@ function Tools() {
               </div>
             )}
 
-            {/* STATE 1: DOWNLOAD COMPLETE */}
+            {/* DOWNLOAD COMPLETE */}
             {downloadResult?.success ? (
               <div className="py-8 text-center">
                 <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl text-emerald-400 mb-5">
@@ -555,7 +555,7 @@ function Tools() {
                 </button>
               </div>
             ) : videoInfo ? (
-              /* STATE 2: QUALITY SELECTOR & DOWNLOAD */
+              /* QUALITY SELECTOR */
               <div className="mt-6">
                 <div className="rounded-2xl border border-slate-800 bg-[#0c1322] p-4">
                   <div className="flex gap-4 items-center">
@@ -656,7 +656,7 @@ function Tools() {
                 </div>
               </div>
             ) : (
-              /* STATE 3: URL INPUT FORM */
+              /* URL INPUT */
               <form onSubmit={extractVideo} className="mt-6 space-y-5">
                 <p className="text-sm leading-relaxed text-slate-400">
                   Paste the public {activeTool.category} link below to fetch video qualities and download options.
