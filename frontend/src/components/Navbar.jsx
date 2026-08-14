@@ -19,7 +19,7 @@ import {
   Wrench,
   ShieldCheck,
   Network,
-  History as HistoryIcon, // <-- Added History Icon
+  History as HistoryIcon,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -115,7 +115,7 @@ export default function Navbar() {
           max-w-7xl
           items-center
           justify-between
-          px-4
+          px-3
           sm:px-6
         "
       >
@@ -128,8 +128,10 @@ export default function Navbar() {
           className="
             group
             flex
+            shrink-0
             items-center
-            gap-2.5
+            gap-2
+            sm:gap-2.5
             transition-transform
             hover:scale-[1.02]
             active:scale-[0.98]
@@ -164,10 +166,11 @@ export default function Navbar() {
               via-slate-800
               to-slate-900
               bg-clip-text
-              text-xl
+              text-lg
               font-extrabold
               tracking-tight
               text-transparent
+              sm:text-xl
             "
           >
             MyBlog
@@ -175,10 +178,10 @@ export default function Navbar() {
         </Link>
 
         {/* ===================================================
-            DESKTOP NAVIGATION
+            DESKTOP / TABLET NAVIGATION
         ==================================================== */}
 
-        <div className="hidden items-center gap-1.5 md:flex">
+        <div className="hidden items-center gap-1 md:flex">
           <NavLink
             to="/"
             end
@@ -188,11 +191,12 @@ export default function Navbar() {
                 items-center
                 gap-2
                 rounded-xl
-                px-4
+                px-3
                 py-2
                 text-sm
                 font-semibold
                 transition-all
+                lg:px-4
 
                 ${
                   isActive
@@ -214,11 +218,12 @@ export default function Navbar() {
                 items-center
                 gap-2
                 rounded-xl
-                px-4
+                px-3
                 py-2
                 text-sm
                 font-semibold
                 transition-all
+                lg:px-4
 
                 ${
                   isActive
@@ -241,11 +246,12 @@ export default function Navbar() {
                 items-center
                 gap-2
                 rounded-xl
-                px-4
+                px-3
                 py-2
                 text-sm
                 font-semibold
                 transition-all
+                lg:px-4
 
                 ${
                   isActive
@@ -256,7 +262,8 @@ export default function Navbar() {
             }
           >
             <Network size={16} className="shrink-0" />
-            API TESTING
+            <span className="hidden lg:inline">API TESTING</span>
+            <span className="lg:hidden">API</span>
           </NavLink>
         </div>
 
@@ -264,9 +271,9 @@ export default function Navbar() {
             RIGHT SIDE USER MENU
         ==================================================== */}
 
-        <div ref={dropdownRef} className="relative">
+        <div ref={dropdownRef} className="relative shrink-0">
           {loading ? (
-            <div className="h-10 w-28 animate-pulse rounded-full bg-slate-200/80" />
+            <div className="h-10 w-20 animate-pulse rounded-full bg-slate-200/80 sm:w-28" />
           ) : user ? (
             /* Logged-In User Button */
             <button
@@ -276,18 +283,20 @@ export default function Navbar() {
                 group
                 flex
                 items-center
-                gap-2.5
+                gap-2
                 rounded-full
                 border
                 border-slate-200/80
                 bg-slate-50/50
                 p-1.5
-                pr-3.5
+                pr-2.5
                 shadow-sm
                 transition-all
                 hover:border-orange-300
                 hover:bg-white
                 hover:shadow-md
+                sm:gap-2.5
+                sm:pr-3.5
               "
             >
               <div
@@ -340,12 +349,12 @@ export default function Navbar() {
             </button>
           ) : (
             /* Guest Buttons */
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Link
                 to="/login"
                 className="
                   rounded-xl
-                  px-4
+                  px-2.5
                   py-2
                   text-xs
                   font-bold
@@ -353,6 +362,7 @@ export default function Navbar() {
                   transition
                   hover:bg-slate-100/80
                   hover:text-slate-900
+                  sm:px-4
                 "
               >
                 Login
@@ -366,7 +376,7 @@ export default function Navbar() {
                   from-slate-900
                   via-slate-800
                   to-slate-900
-                  px-4
+                  px-2.5
                   py-2
                   text-xs
                   font-bold
@@ -377,6 +387,7 @@ export default function Navbar() {
                   hover:scale-[1.02]
                   hover:shadow-slate-900/20
                   active:scale-[0.98]
+                  sm:px-4
                 "
               >
                 Signup
@@ -394,7 +405,8 @@ export default function Navbar() {
                 absolute
                 right-0
                 mt-2.5
-                w-72
+                w-[calc(100vw-1.5rem)]
+                max-w-72
                 overflow-hidden
                 rounded-2xl
                 border
@@ -446,6 +458,7 @@ export default function Navbar() {
                         <span
                           className="
                             inline-flex
+                            shrink-0
                             items-center
                             gap-0.5
                             rounded-full
@@ -463,7 +476,7 @@ export default function Navbar() {
                       )}
                     </div>
 
-                    <p className="truncate text-[11px] font-medium text-slate-500 mt-0.5">
+                    <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">
                       {user.email}
                     </p>
                   </div>
