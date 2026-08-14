@@ -13,12 +13,8 @@ import convertRoutes from "./routes/convertRoutes.js";
 
 const app = express();
 
-
 /* =========================================================
-   1. CORS (With Expose Headers for Blobs)
-========================================================= */
-/* =========================================================
-   1. CORS
+   1. CORS CONFIGURATION (VERCEL & LOCALHOST SAFE)
 ========================================================= */
 const allowedOrigins = [
   "http://localhost:5173",
@@ -26,12 +22,17 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://localhost:3001",
   "https://my-blogs-beige.vercel.app",
+  "https://my-blogs-beige.vercel.app/",
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith("vercel.app")) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".vercel.app")
+      ) {
         callback(null, true);
       } else {
         callback(null, true);
@@ -47,21 +48,11 @@ app.use(
 /* =========================================================
    2. BODY PARSER
 ========================================================= */
-app.use(
-  express.json({
-    limit: "50mb",
-  })
-);
-
-app.use(
-  express.urlencoded({
-    limit: "50mb",
-    extended: true,
-  })
-);
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 /* =========================================================
-   3. HTTP REQUEST LOGGER (Morgan -> Winston)
+   3. HTTP REQUEST LOGGER
 ========================================================= */
 app.use(
   morgan(
@@ -69,9 +60,7 @@ app.use(
     {
       stream: {
         write: (message) => {
-          logger.info(
-            message.trim()
-          );
+          logger.info(message.trim());
         },
       },
     }
@@ -81,113 +70,23 @@ app.use(
 /* =========================================================
    4. ROUTES
 ========================================================= */
-app.use(
-  "/api/blogs",
-  blogRoutes
-);
-
-app.use(
-  "/api/auth",
-  authRoutes
-);
-
-app.use(
-  "/api/tools",
-  toolRoutes
-);
-
-app.use(
-  "/api/convert",
-  convertRoutes
-);
+app.use("/api/blogs", blogRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/tools", toolRoutes);
+app.use("/api/convert", convertRoutes);
 
 /* =========================================================
-   FRONTEND REACT ERROR LOGGING
+   FRONTEND ERROR LOGGING
 ========================================================= */
-
-app.post(
-  "/api/logs/client",
-  (req, res) => {
-    try {
-      const {
-        type,
-        message,
-        stack,
-        componentStack,
-        url,
-        pathname,
-        search,
-        hash,
-        timestamp,
-        userAgent,
-      } = req.body;
-
-      logger.error(`
-============================================================
-CLIENT / REACT ERROR
-============================================================
-
-Type:
-${type || "REACT_ERROR"}
-
-Time:
-${timestamp || new Date().toISOString()}
-
-Page URL:
-${url || "Unknown"}
-
-Page Path:
-${pathname || "Unknown"}
-
-Query String:
-${search || "None"}
-
-Hash:
-${hash || "None"}
-
-Error Message:
-${message || "Unknown React Error"}
-
-Stack:
-${stack || "N/A"}
-
-Component Stack:
-${componentStack || "N/A"}
-
-User Agent:
-${userAgent || "N/A"}
-
-============================================================
-`);
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Frontend error logged successfully.",
-      });
-    } catch (error) {
-      logger.error(`
-============================================================
-CLIENT ERROR LOGGER FAILED
-============================================================
-
-Message:
-${error?.message || error}
-
-Stack:
-${error?.stack || "N/A"}
-
-============================================================
-`);
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Failed to save frontend error.",
-      });
-    }
+app.post("/api/logs/client", (req, res) => {
+  try {
+    const { type, message, stack, componentStack, url, userAgent } = req.body;
+    logger.error(`CLIENT ERROR: ${type} - ${message} | URL: ${url} | UA: ${userAgent}`);
+    return res.status(200).json({ success: true, message: "Logged." });
+  } catch (error) {
+    return res.status(500).json({ success: false });
   }
-);
+});
 
 /* =========================================================
    5. HEALTH CHECK
@@ -195,8 +94,7 @@ ${error?.stack || "N/A"}
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message:
-      "API server is running.",
+    message: "API server is running.",
   });
 });
 
@@ -204,40 +102,25 @@ app.get("/", (req, res) => {
    6. 404 HANDLER
 ========================================================= */
 app.use((req, res) => {
-  logger.warn(
-    `404 Route not found: ${req.method} ${req.originalUrl} - IP: ${req.ip}`
-  );
-
   res.status(404).json({
     success: false,
-    message:
-      "API route not found.",
+    message: "API route not found.",
   });
 });
 
 /* =========================================================
    7. ERROR HANDLER
 ========================================================= */
-app.use(
-  (err, req, res, next) => {
-    logger.error(
-      `SERVER ERROR: ${err.message} | URL: ${req.originalUrl} | Method: ${req.method} | IP: ${req.ip}\nStack: ${err.stack}`
-    );
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
-    res.status(
-      err.status || 500
-    ).json({
-      success: false,
-      message:
-        err.message ||
-        "Internal server error.",
-    });
+app.use((err, req, res, next) => {
+  logger.error(`SERVER ERROR: ${err.message}\nStack: ${err.stack}`);
+  if (res.headersSent) {
+    return next(err);
   }
-);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error.",
+  });
+});
 
 /* =========================================================
    8. START SERVER
@@ -245,52 +128,13 @@ app.use(
 const startServer = async () => {
   try {
     await connectDB();
-
-    const PORT =
-      process.env.PORT || 8000;
-
-    app.listen(
-      PORT,
-      () => {
-        logger.info(
-          `Server running on http://localhost:${PORT}`
-        );
-
-        console.log("");
-
-        console.log(
-          "======================================"
-        );
-
-        console.log(
-          `Server running on http://localhost:${PORT}`
-        );
-
-        console.log(
-          `Tools extract: http://localhost:${PORT}/api/tools/extract`
-        );
-
-        console.log(
-          `Tools download: http://localhost:${PORT}/api/tools/download`
-        );
-
-        console.log(
-          "======================================"
-        );
-      }
-    );
+    const PORT = process.env.PORT || 8000;
+    app.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT}`);
+      console.log(`Server running on port ${PORT}`);
+    });
   } catch (error) {
-    logger.error(
-      `Failed to start server: ${error.message}\nStack: ${
-        error.stack || "N/A"
-      }`
-    );
-
-    console.error(
-      "Failed to start server:",
-      error.message
-    );
-
+    logger.error(`Failed to start server: ${error.message}`);
     process.exit(1);
   }
 };
