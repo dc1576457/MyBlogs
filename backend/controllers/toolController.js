@@ -83,7 +83,7 @@ const formatBytes = (bytes) => {
 };
 
 /* =========================================================
-   COMMON YT-DLP OPTIONS (FIXED YOUTUBE PLAYER CLIENT)
+   COMMON YT-DLP OPTIONS (SAFE FOR RENDER)
 ========================================================= */
 
 const getCommonOptions = () => {
@@ -93,11 +93,9 @@ const getCommonOptions = () => {
     noWriteSubs: true,
     noCheckCertificates: true,
     restrictFilenames: true,
-    // FIX: Using ios,mweb,android bypasses YouTube sign-in/bot restriction errors
     extractorArgs: "youtube:player_client=ios,mweb,android",
-    retries: 5,
-    fragmentRetries: 5,
-    concurrentFragments: 4,
+    retries: 3,
+    fragmentRetries: 3,
     noAbortOnError: true,
     addHeader: [`User-Agent:${USER_AGENT}`],
   };
@@ -147,7 +145,7 @@ const extractInstagramFallback = async (url) => {
     const response = await axios.get(embedUrl, {
       headers: {
         "User-Agent": USER_AGENT,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
       },
       timeout: 10000,
@@ -334,8 +332,6 @@ const extractVideoInfo = async (url) => {
     ...getCommonOptions(),
     dumpSingleJson: true,
     skipDownload: true,
-    noWarnings: false,
-    format: "bv*+ba/b/best",
   };
 
   return await youtubedl(url, options);
@@ -349,18 +345,14 @@ const getAvailableFormats = (info) => {
   for (const height of requestedQualities) {
     const candidates = formats.filter((format) => {
       const formatHeight = Number(format.height);
-      return (
-        formatHeight === height &&
-        format.vcodec &&
-        format.vcodec !== "none"
-      );
+      return formatHeight === height && format.vcodec && format.vcodec !== "none";
     });
 
     if (!candidates.length) continue;
 
     candidates.sort((a, b) => {
-      const aScore = (a.ext === "mp4" ? 100 : 0) + ((a.vcodec || "").includes("avc") ? 50 : 0);
-      const bScore = (b.ext === "mp4" ? 100 : 0) + ((b.vcodec || "").includes("avc") ? 50 : 0);
+      const aScore = (a.ext === "mp4" ? 100 : 0) + ((a.acodec && a.acodec !== "none") ? 50 : 0);
+      const bScore = (b.ext === "mp4" ? 100 : 0) + ((b.acodec && b.acodec !== "none") ? 50 : 0);
       return bScore - aScore;
     });
 
@@ -379,9 +371,8 @@ const getAvailableFormats = (info) => {
     });
   }
 
-  // Failsafe if format height array wasn't found
   if (result.length === 0) {
-    const defaultUrl = info?.url || (formats.find((f) => f.url)?.url) || null;
+    const defaultUrl = info?.url || formats.find((f) => f.url)?.url || null;
     requestedQualities.forEach((height) => {
       result.push({
         height,
@@ -426,13 +417,12 @@ const extractTool = async (req, res) => {
             thumbnail: info.thumbnail || null,
             uploader: info.uploader || info.channel || null,
             duration: info.duration_string || null,
-            durationSeconds: info.duration || null,
             webpageUrl: info.webpage_url || cleanUrl,
             formats,
           },
         });
       } catch (ytErr) {
-        console.warn("yt-dlp YouTube extraction failed, using oEmbed fallback:", ytErr?.message || ytErr);
+        console.warn("yt-dlp extraction failed, using oEmbed fallback:", ytErr?.message || ytErr);
         const oembedData = await extractYouTubeOembed(cleanUrl);
         if (oembedData) {
           return res.status(200).json({ success: true, data: oembedData });
@@ -440,7 +430,7 @@ const extractTool = async (req, res) => {
 
         return res.status(500).json({
           success: false,
-          message: "Unable to extract YouTube video. Please ensure the link is public.",
+          message: "Unable to extract YouTube video details. Please ensure the link is public.",
         });
       }
     }
@@ -527,7 +517,7 @@ const downloadTool = async (req, res) => {
 
   const numericQuality = Number(quality) || 720;
 
-  /* DIRECT STREAM FOR CDN LINKS */
+  /* 1. DIRECT STREAM FOR CDN / PRE-FETCHED LINKS */
   if (directUrl && directUrl.startsWith("http")) {
     try {
       const streamResponse = await axios({
@@ -536,9 +526,9 @@ const downloadTool = async (req, res) => {
         responseType: "stream",
         headers: {
           "User-Agent": USER_AGENT,
-          "Referer": url,
+          Referer: url,
         },
-        timeout: 30000,
+        timeout: 45000,
       });
 
       const contentType = streamResponse.headers["content-type"] || "video/mp4";
@@ -547,7 +537,7 @@ const downloadTool = async (req, res) => {
 
       res.status(200);
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Content-Disposition", `attachment; filename="media-${numericQuality}p.${ext}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="media-${Date.now()}.${ext}"`);
 
       if (streamResponse.headers["content-length"]) {
         res.setHeader("Content-Length", streamResponse.headers["content-length"]);
@@ -555,11 +545,11 @@ const downloadTool = async (req, res) => {
 
       return streamResponse.data.pipe(res);
     } catch (streamErr) {
-      console.warn("Direct stream failed, falling back to yt-dlp:", streamErr.message);
+      console.warn("Direct stream failed, attempting fallback:", streamErr.message);
     }
   }
 
-  /* YT-DLP FILE DOWNLOAD (YOUTUBE / FALLBACK) */
+  /* 2. YT-DLP SAFE FILE DOWNLOAD (WITHOUT REQUIRING FFMPEG) */
   const tempDir = path.join(os.tmpdir(), "mern-tools-videos");
   await fs.promises.mkdir(tempDir, { recursive: true });
 
@@ -568,41 +558,34 @@ const downloadTool = async (req, res) => {
   let filePath = null;
 
   try {
+    // Single-file stream selectors avoid ffmpeg muxing failures on Render
     const format =
-      `bv*[height<=${numericQuality}][ext=mp4]+ba[ext=m4a]/` +
-      `bv*[height<=${numericQuality}]+ba/` +
-      `b[height<=${numericQuality}][ext=mp4]/` +
-      `b[height<=${numericQuality}]/` +
-      `bv*+ba/b/best`;
+      `best[height<=${numericQuality}][ext=mp4]/` +
+      `best[height<=${numericQuality}]/` +
+      `best[ext=mp4]/best`;
 
     const options = {
       ...getCommonOptions(),
       output: outputTemplate,
       format,
-      mergeOutputFormat: "mp4",
-      remuxVideo: "mp4",
-      formatSort: "vcodec:h264,acodec:aac,res,fps",
-      checkFormats: true,
-      keepVideo: false,
-      keepFragments: false,
     };
 
     await youtubedl(url, options);
 
     const files = await fs.promises.readdir(tempDir);
     const outputFile = files.find(
-      (file) => file.startsWith(id) && /\.(mp4|webm|mkv|mov)$/i.test(file)
+      (file) => file.startsWith(id) && /\.(mp4|webm|mkv|mov|jpg|jpeg|png)$/i.test(file)
     );
 
     if (!outputFile) {
-      throw new Error("Download completed, but failed to create local video file.");
+      throw new Error("Failed to create media file on server.");
     }
 
     filePath = path.join(tempDir, outputFile);
     const stats = await fs.promises.stat(filePath);
 
     if (!stats.size || stats.size <= 0) {
-      throw new Error("Downloaded video file is empty.");
+      throw new Error("Downloaded file is empty.");
     }
 
     res.status(200);
@@ -615,7 +598,7 @@ const downloadTool = async (req, res) => {
     stream.on("error", async () => {
       try { await fs.promises.unlink(filePath); } catch {}
       if (!res.headersSent) {
-        res.status(500).json({ success: false, message: "Unable to send video file." });
+        res.status(500).json({ success: false, message: "Unable to stream video file." });
       }
     });
 
@@ -623,9 +606,9 @@ const downloadTool = async (req, res) => {
       try { await fs.promises.unlink(filePath); } catch {}
     });
 
-    stream.pipe(res);
+    return stream.pipe(res);
   } catch (error) {
-    console.error("VIDEO DOWNLOAD ERROR", error);
+    console.error("VIDEO DOWNLOAD ERROR:", error?.message || error);
 
     try {
       const files = await fs.promises.readdir(tempDir);
@@ -639,7 +622,7 @@ const downloadTool = async (req, res) => {
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
-        message: error?.message || "Video download failed.",
+        message: "Download failed. The media source may be protected or restricted by the platform.",
       });
     }
   }
