@@ -3,13 +3,12 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import axios from "axios";
-import youtubedl from "youtube-dl-exec";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /* =========================================================
-   URL VALIDATIONS
+   URL VALIDATION HELPERS
 ========================================================= */
 
 export const isYouTubeUrl = (value) => {
@@ -65,64 +64,88 @@ export const isPinterestUrl = (value) => {
   }
 };
 
-const formatBytes = (bytes) => {
-  if (!bytes) return null;
-  const value = Number(bytes);
-  if (!Number.isFinite(value)) return null;
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
-};
-
-const getCommonOptions = () => ({
-  noPlaylist: true,
-  noWriteThumbnail: true,
-  noWriteSubs: true,
-  noCheckCertificates: true,
-  restrictFilenames: true,
-  extractorArgs: "youtube:player_client=android,ios,web",
-  retries: 3,
-  fragmentRetries: 3,
-  noAbortOnError: true,
-  addHeader: [`User-Agent:${USER_AGENT}`],
-});
-
 /* =========================================================
-   PLATFORM FALLBACK SCRAPERS
+   YOUTUBE ENGINE (CLOUD / RENDER BYPASS)
 ========================================================= */
 
-// YouTube oEmbed fallback
-const extractYouTubeOembed = async (url) => {
+const getYouTubeStreamUrl = async (url, quality = "720") => {
+  const instances = [
+    "https://api.cobalt.tools",
+    "https://cobalt.kwiatekm.pl",
+    "https://co.wuk.sh",
+  ];
+
+  for (const instance of instances) {
+    try {
+      const response = await axios.post(
+        `${instance}/`,
+        {
+          url,
+          videoQuality: String(quality),
+          downloadMode: "auto",
+        },
+        {
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+          },
+          timeout: 8000,
+        }
+      );
+
+      if (response.data && response.data.url) {
+        return response.data.url;
+      }
+    } catch {
+      // try next instance
+    }
+  }
+  return null;
+};
+
+const extractYouTubeMeta = async (url) => {
   try {
+    let videoId = "";
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    if (match && match[2].length === 11) {
+      videoId = match[2];
+    }
+
     const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
     const response = await axios.get(oembedUrl, {
       headers: { "User-Agent": USER_AGENT },
       timeout: 8000,
     });
-    if (response.data) {
-      return {
-        id: crypto.randomBytes(8).toString("hex"),
-        title: response.data.title || "YouTube Video",
-        thumbnail: response.data.thumbnail_url || null,
-        uploader: response.data.author_name || "YouTube Creator",
-        webpageUrl: url,
-        formats: [
-          { height: 1080, filesizeText: "1080p Full HD" },
-          { height: 720, filesizeText: "720p HD" },
-          { height: 480, filesizeText: "480p SD" },
-          { height: 360, filesizeText: "360p SD" },
-        ],
-      };
-    }
+
+    const thumbnail = videoId
+      ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      : response.data?.thumbnail_url;
+
+    return {
+      id: videoId || crypto.randomBytes(6).toString("hex"),
+      title: response.data?.title || "YouTube Video",
+      thumbnail: thumbnail || null,
+      uploader: response.data?.author_name || "YouTube Creator",
+      webpageUrl: url,
+      formats: [
+        { height: 1080, filesizeText: "1080p Full HD" },
+        { height: 720, filesizeText: "720p HD" },
+        { height: 480, filesizeText: "480p SD" },
+        { height: 360, filesizeText: "360p SD" },
+      ],
+    };
   } catch (err) {
-    console.error("YouTube oEmbed fallback error:", err.message);
+    return null;
   }
-  return null;
 };
 
-// Instagram Scraper
-const extractInstagramFallback = async (url) => {
+/* =========================================================
+   INSTAGRAM FAST SCRAPER
+========================================================= */
+
+const extractInstagramData = async (url) => {
   try {
     const match = url.match(/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
     if (!match) return null;
@@ -132,12 +155,12 @@ const extractInstagramFallback = async (url) => {
     const response = await axios.get(embedUrl, {
       headers: {
         "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
       },
       timeout: 10000,
     });
 
-    const html = response.data;
+    const html = String(response.data);
     const videoMatch =
       html.match(/"video_url"\s*:\s*"([^"]+)"/i) ||
       html.match(/<video[^>]+src="([^"]+)"/i);
@@ -153,8 +176,12 @@ const extractInstagramFallback = async (url) => {
       title = titleMatch[1].replace(/<[^>]+>/g, "").trim().slice(0, 80) || "Instagram Media";
     }
 
-    const videoUrl = videoMatch ? videoMatch[1].replace(/\\u0026/g, "&").replace(/&amp;/g, "&") : null;
-    const imgUrl = imgMatch ? imgMatch[1].replace(/\\u0026/g, "&").replace(/&amp;/g, "&") : null;
+    const videoUrl = videoMatch
+      ? videoMatch[1].replace(/\\u0026/g, "&").replace(/&amp;/g, "&").replace(/\\/g, "")
+      : null;
+    const imgUrl = imgMatch
+      ? imgMatch[1].replace(/\\u0026/g, "&").replace(/&amp;/g, "&").replace(/\\/g, "")
+      : null;
 
     if (videoUrl) {
       return {
@@ -176,17 +203,22 @@ const extractInstagramFallback = async (url) => {
         thumbnail: imgUrl,
         isPhoto: true,
         webpageUrl: url,
-        formats: [{ height: 1080, filesizeText: "High Quality Photo", directUrl: imgUrl }],
+        formats: [
+          { height: 1080, filesizeText: "High Quality Photo", directUrl: imgUrl },
+        ],
       };
     }
   } catch (err) {
-    console.error("Instagram fallback error:", err.message);
+    console.error("Instagram Scraper Error:", err.message);
   }
   return null;
 };
 
-// Facebook Scraper
-const extractFacebookFallback = async (url) => {
+/* =========================================================
+   FACEBOOK FAST SCRAPER
+========================================================= */
+
+const extractFacebookData = async (url) => {
   try {
     const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
     const response = await axios.get(embedUrl, {
@@ -194,7 +226,7 @@ const extractFacebookFallback = async (url) => {
       timeout: 10000,
     });
 
-    const html = response.data;
+    const html = String(response.data);
     const hdMatch = html.match(/hd_src\s*:\s*"([^"]+)"/i) || html.match(/"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
     const sdMatch = html.match(/sd_src\s*:\s*"([^"]+)"/i) || html.match(/"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
     const thumbMatch = html.match(/thumbnail_src\s*:\s*"([^"]+)"/i) || html.match(/<meta property="og:image" content="([^"]+)"/i);
@@ -219,13 +251,16 @@ const extractFacebookFallback = async (url) => {
       };
     }
   } catch (err) {
-    console.error("Facebook fallback error:", err.message);
+    console.error("Facebook Scraper Error:", err.message);
   }
   return null;
 };
 
-// Pinterest Scraper
-const extractPinterestFallback = async (url) => {
+/* =========================================================
+   PINTEREST FAST SCRAPER
+========================================================= */
+
+const extractPinterestData = async (url) => {
   try {
     let targetUrl = url;
     if (url.includes("pin.it")) {
@@ -242,7 +277,7 @@ const extractPinterestFallback = async (url) => {
       timeout: 10000,
     });
 
-    const html = response.data;
+    const html = String(response.data);
     const videoMatch =
       html.match(/<meta property="og:video" content="([^"]+)"/i) ||
       html.match(/<meta property="og:video:secure_url" content="([^"]+)"/i) ||
@@ -294,57 +329,9 @@ const extractPinterestFallback = async (url) => {
       };
     }
   } catch (err) {
-    console.error("Pinterest fallback error:", err.message);
+    console.error("Pinterest Scraper Error:", err.message);
   }
   return null;
-};
-
-const getAvailableFormats = (info) => {
-  const formats = Array.isArray(info?.formats) ? info.formats : [];
-  const requestedQualities = [1080, 720, 480, 360];
-  const result = [];
-
-  for (const height of requestedQualities) {
-    const candidates = formats.filter((format) => {
-      const formatHeight = Number(format.height);
-      return formatHeight === height && format.vcodec && format.vcodec !== "none";
-    });
-
-    if (!candidates.length) continue;
-
-    candidates.sort((a, b) => {
-      const aScore = (a.ext === "mp4" ? 100 : 0) + (a.acodec && a.acodec !== "none" ? 50 : 0);
-      const bScore = (b.ext === "mp4" ? 100 : 0) + (b.acodec && b.acodec !== "none" ? 50 : 0);
-      return bScore - aScore;
-    });
-
-    const selected = candidates[0];
-
-    result.push({
-      height,
-      width: selected.width || null,
-      fps: selected.fps || null,
-      ext: selected.ext || "mp4",
-      formatId: selected.format_id || null,
-      filesize: selected.filesize || selected.filesize_approx || null,
-      filesizeText: formatBytes(selected.filesize || selected.filesize_approx) || `${height}p Video`,
-      hasAudio: Boolean(selected.acodec && selected.acodec !== "none"),
-      directUrl: selected.url || null,
-    });
-  }
-
-  if (result.length === 0) {
-    const defaultUrl = info?.url || formats.find((f) => f.url)?.url || null;
-    requestedQualities.forEach((height) => {
-      result.push({
-        height,
-        filesizeText: `${height}p Video`,
-        directUrl: defaultUrl,
-      });
-    });
-  }
-
-  return result;
 };
 
 /* =========================================================
@@ -367,38 +354,9 @@ export const extractTool = async (req, res) => {
         return res.status(400).json({ success: false, message: "Please enter a valid YouTube URL." });
       }
 
-      try {
-        const info = await youtubedl(cleanUrl, {
-          ...getCommonOptions(),
-          dumpSingleJson: true,
-          skipDownload: true,
-        });
-
-        const formats = getAvailableFormats(info);
-
-        return res.status(200).json({
-          success: true,
-          data: {
-            id: info.id || null,
-            title: info.title || "YouTube Video",
-            thumbnail: info.thumbnail || null,
-            uploader: info.uploader || info.channel || null,
-            duration: info.duration_string || null,
-            webpageUrl: info.webpage_url || cleanUrl,
-            formats,
-          },
-        });
-      } catch (ytErr) {
-        console.warn("yt-dlp extraction failed, using oEmbed fallback:", ytErr?.message || ytErr);
-        const oembedData = await extractYouTubeOembed(cleanUrl);
-        if (oembedData) {
-          return res.status(200).json({ success: true, data: oembedData });
-        }
-
-        return res.status(500).json({
-          success: false,
-          message: "Unable to extract YouTube video details. Please ensure the link is public.",
-        });
+      const meta = await extractYouTubeMeta(cleanUrl);
+      if (meta) {
+        return res.status(200).json({ success: true, data: meta });
       }
     }
 
@@ -407,8 +365,8 @@ export const extractTool = async (req, res) => {
       if (!isInstagramUrl(cleanUrl)) {
         return res.status(400).json({ success: false, message: "Please enter a valid Instagram URL." });
       }
-      const instaData = await extractInstagramFallback(cleanUrl);
-      if (instaData) return res.status(200).json({ success: true, data: instaData });
+      const data = await extractInstagramData(cleanUrl);
+      if (data) return res.status(200).json({ success: true, data });
     }
 
     /* 3. FACEBOOK */
@@ -416,8 +374,8 @@ export const extractTool = async (req, res) => {
       if (!isFacebookUrl(cleanUrl)) {
         return res.status(400).json({ success: false, message: "Please enter a valid Facebook URL." });
       }
-      const fbData = await extractFacebookFallback(cleanUrl);
-      if (fbData) return res.status(200).json({ success: true, data: fbData });
+      const data = await extractFacebookData(cleanUrl);
+      if (data) return res.status(200).json({ success: true, data });
     }
 
     /* 4. PINTEREST */
@@ -425,48 +383,24 @@ export const extractTool = async (req, res) => {
       if (!isPinterestUrl(cleanUrl)) {
         return res.status(400).json({ success: false, message: "Please enter a valid Pinterest URL." });
       }
-      const pinData = await extractPinterestFallback(cleanUrl);
-      if (pinData) return res.status(200).json({ success: true, data: pinData });
+      const data = await extractPinterestData(cleanUrl);
+      if (data) return res.status(200).json({ success: true, data });
     }
 
-    /* GENERAL YT-DLP FALLBACK */
-    try {
-      const info = await youtubedl(cleanUrl, {
-        ...getCommonOptions(),
-        dumpSingleJson: true,
-        skipDownload: true,
-      });
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: info.id || null,
-          title: info.title || "Extracted Video",
-          thumbnail: info.thumbnail || null,
-          webpageUrl: cleanUrl,
-          formats: [
-            { height: 1080, filesizeText: "HD Video", directUrl: info.url },
-            { height: 720, filesizeText: "SD Video", directUrl: info.url },
-          ],
-        },
-      });
-    } catch {
-      return res.status(500).json({
-        success: false,
-        message: "Unable to extract media details. Platform link may be private or restricted.",
-      });
-    }
+    return res.status(400).json({
+      success: false,
+      message: "Unable to extract media. Please ensure the link is publicly accessible.",
+    });
   } catch (error) {
-    console.error("EXTRACT CONTROLLER ERROR:", error);
     return res.status(500).json({
       success: false,
-      message: error?.message || "Unable to extract video.",
+      message: error?.message || "Failed to extract media.",
     });
   }
 };
 
 /* =========================================================
-   DOWNLOAD CONTROLLER
+   DOWNLOAD CONTROLLER (STREAM PIPELINE)
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
@@ -477,28 +411,37 @@ export const downloadTool = async (req, res) => {
   }
 
   const numericQuality = Number(quality) || 720;
+  let targetDownloadUrl = directUrl;
 
-  /* 1. DIRECT STREAM VIA PROXIED REQUEST */
-  if (directUrl && typeof directUrl === "string" && directUrl.startsWith("http")) {
+  // YouTube bypass resolution
+  if (!targetDownloadUrl && isYouTubeUrl(url)) {
+    targetDownloadUrl = await getYouTubeStreamUrl(url, numericQuality);
+  }
+
+  // Stream directly to browser
+  if (targetDownloadUrl && targetDownloadUrl.startsWith("http")) {
     try {
       const streamResponse = await axios({
         method: "GET",
-        url: directUrl,
+        url: targetDownloadUrl,
         responseType: "stream",
         headers: {
           "User-Agent": USER_AGENT,
           Accept: "*/*",
         },
-        timeout: 60000,
+        timeout: 90000,
       });
 
       const contentType = streamResponse.headers["content-type"] || "video/mp4";
-      const isImage = contentType.includes("image");
-      const ext = isImage ? "jpg" : "mp4";
+      const isPhoto = contentType.includes("image");
+      const ext = isPhoto ? "jpg" : "mp4";
 
       res.status(200);
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Content-Disposition", `attachment; filename="media-${Date.now()}.${ext}"`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${tool.split("-")[0]}-${numericQuality}p-${Date.now()}.${ext}"`
+      );
 
       if (streamResponse.headers["content-length"]) {
         res.setHeader("Content-Length", streamResponse.headers["content-length"]);
@@ -506,91 +449,12 @@ export const downloadTool = async (req, res) => {
 
       return streamResponse.data.pipe(res);
     } catch (streamErr) {
-      console.warn("Direct stream failed, falling back to yt-dlp engine:", streamErr.message);
+      console.warn("Direct stream pipe failed:", streamErr.message);
     }
   }
 
-  /* 2. YT-DLP SAFE FILE DOWNLOAD */
-  const tempDir = path.join(os.tmpdir(), "mern-tools-downloads");
-  await fs.promises.mkdir(tempDir, { recursive: true });
-
-  const id = crypto.randomBytes(16).toString("hex");
-  const outputTemplate = path.join(tempDir, `${id}.%(ext)s`);
-  let filePath = null;
-
-  try {
-    const format =
-      `bestvideo[height<=${numericQuality}][ext=mp4]+bestaudio[ext=m4a]/` +
-      `best[height<=${numericQuality}][ext=mp4]/` +
-      `best[height<=${numericQuality}]/` +
-      `best[ext=mp4]/best`;
-
-    const options = {
-      ...getCommonOptions(),
-      output: outputTemplate,
-      format,
-    };
-
-    await youtubedl(url, options);
-
-    const files = await fs.promises.readdir(tempDir);
-    const outputFile = files.find((file) => file.startsWith(id));
-
-    if (!outputFile) {
-      throw new Error("Failed to create media file on server.");
-    }
-
-    filePath = path.join(tempDir, outputFile);
-    const stats = await fs.promises.stat(filePath);
-
-    if (!stats.size || stats.size <= 0) {
-      throw new Error("Downloaded file is empty.");
-    }
-
-    const ext = path.extname(outputFile).replace(".", "") || "mp4";
-    const contentType = ext === "jpg" || ext === "png" || ext === "jpeg" ? `image/${ext}` : "video/mp4";
-
-    res.status(200);
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `attachment; filename="download-${numericQuality}p.${ext}"`);
-    res.setHeader("Content-Length", stats.size);
-
-    const stream = fs.createReadStream(filePath);
-
-    const cleanup = async () => {
-      if (filePath) {
-        try {
-          await fs.promises.unlink(filePath);
-        } catch {}
-      }
-    };
-
-    stream.on("error", async () => {
-      await cleanup();
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: "Unable to stream media." });
-      }
-    });
-
-    stream.on("close", cleanup);
-    return stream.pipe(res);
-  } catch (error) {
-    console.error("VIDEO DOWNLOAD ERROR:", error?.message || error);
-
-    try {
-      const files = await fs.promises.readdir(tempDir);
-      for (const file of files) {
-        if (file.startsWith(id)) {
-          await fs.promises.unlink(path.join(tempDir, file)).catch(() => {});
-        }
-      }
-    } catch {}
-
-    if (!res.headersSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Download failed. The media source may be protected or restricted by the platform.",
-      });
-    }
-  }
+  return res.status(500).json({
+    success: false,
+    message: "Download failed. The media source may be protected or restricted by the platform.",
+  });
 };
