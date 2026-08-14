@@ -4,7 +4,7 @@ import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, KeyRound } from 
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
 
-const AUTH_API_URL = "http://localhost:8000/api/auth";
+const AUTH_API_URL = "https://myblogs-fr9t.onrender.com/api/auth";
 
 export default function ResetPassword() {
   const { token } = useParams();
