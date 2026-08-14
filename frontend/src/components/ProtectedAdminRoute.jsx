@@ -35,7 +35,7 @@ export default function ProtectedAdminRoute() {
   if (!user) {
     return (
       <Navigate
-        to="/login"
+        to="/404"
         replace
         state={{
           from:
