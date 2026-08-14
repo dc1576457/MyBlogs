@@ -33,8 +33,8 @@ import {
   Unlock,
 } from "lucide-react";
 
-const API_BASE_URL = "http://localhost:8000/api/blogs";
-const AUTH_API_URL = "http://localhost:8000/api/auth";
+const API_BASE_URL = "https://myblogs-fr9t.onrender.com/api/blogs";
+const AUTH_API_URL = "https://myblogs-fr9t.onrender.com/api/auth";
 
 export default function Dashboard() {
   const navigate = useNavigate();
