@@ -98,17 +98,19 @@ export default function Navbar() {
         top-0
         z-[100]
         w-full
-        h-16
+        h-24
         border-b
         border-slate-200/80
         bg-white/95
         backdrop-blur-xl
         supports-[backdrop-filter]:bg-white/80
         shadow-sm
+        md:h-16
       "
     >
       <div
         className="
+          relative
           mx-auto
           flex
           h-16
@@ -178,16 +180,44 @@ export default function Navbar() {
         </Link>
 
         {/* ===================================================
-            DESKTOP / TABLET NAVIGATION
+            RESPONSIVE NAVIGATION
         ==================================================== */}
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div
+          className="
+            absolute
+            left-0
+            top-16
+            flex
+            w-full
+            items-center
+            gap-1
+            overflow-x-auto
+            border-t
+            border-slate-100
+            bg-white/95
+            px-3
+            py-1.5
+            backdrop-blur-xl
+            scrollbar-hide
+            md:static
+            md:left-auto
+            md:top-auto
+            md:w-auto
+            md:translate-x-0
+            md:overflow-visible
+            md:border-0
+            md:bg-transparent
+            md:p-0
+          "
+        >
           <NavLink
             to="/"
             end
             className={({ isActive }) =>
               `
                 flex
+                shrink-0
                 items-center
                 gap-2
                 rounded-xl
@@ -195,6 +225,7 @@ export default function Navbar() {
                 py-2
                 text-sm
                 font-semibold
+                whitespace-nowrap
                 transition-all
                 lg:px-4
 
@@ -215,6 +246,7 @@ export default function Navbar() {
             className={({ isActive }) =>
               `
                 flex
+                shrink-0
                 items-center
                 gap-2
                 rounded-xl
@@ -222,6 +254,7 @@ export default function Navbar() {
                 py-2
                 text-sm
                 font-semibold
+                whitespace-nowrap
                 transition-all
                 lg:px-4
 
@@ -243,6 +276,7 @@ export default function Navbar() {
             className={({ isActive }) =>
               `
                 flex
+                shrink-0
                 items-center
                 gap-2
                 rounded-xl
@@ -250,6 +284,7 @@ export default function Navbar() {
                 py-2
                 text-sm
                 font-semibold
+                whitespace-nowrap
                 transition-all
                 lg:px-4
 
@@ -262,8 +297,14 @@ export default function Navbar() {
             }
           >
             <Network size={16} className="shrink-0" />
-            <span className="hidden lg:inline">API TESTING</span>
-            <span className="lg:hidden">API</span>
+
+            <span className="sm:hidden">
+              API
+            </span>
+
+            <span className="hidden sm:inline">
+              API TESTING
+            </span>
           </NavLink>
         </div>
 
@@ -271,9 +312,21 @@ export default function Navbar() {
             RIGHT SIDE USER MENU
         ==================================================== */}
 
-        <div ref={dropdownRef} className="relative shrink-0">
+        <div
+          ref={dropdownRef}
+          className="relative z-[120] shrink-0"
+        >
           {loading ? (
-            <div className="h-10 w-20 animate-pulse rounded-full bg-slate-200/80 sm:w-28" />
+            <div
+              className="
+                h-10
+                w-20
+                animate-pulse
+                rounded-full
+                bg-slate-200/80
+                sm:w-28
+              "
+            />
           ) : user ? (
             /* Logged-In User Button */
             <button
@@ -416,7 +469,7 @@ export default function Navbar() {
                 shadow-xl
                 shadow-slate-300/40
                 backdrop-blur-xl
-                z-[110]
+                z-[130]
                 animate-in
                 fade-in
                 slide-in-from-top-2
