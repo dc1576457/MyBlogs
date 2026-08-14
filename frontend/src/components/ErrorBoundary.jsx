@@ -111,7 +111,7 @@ class ErrorBoundary extends Component {
     // ==================================================
 
     fetch(
-      "http://localhost:8000/api/logs/client",
+      "https://myblogs-fr9t.onrender.com/api/logs/client",
       {
         method: "POST",
 
