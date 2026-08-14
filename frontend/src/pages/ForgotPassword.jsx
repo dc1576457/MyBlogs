@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Mail, ArrowLeft, Loader2, KeyRound, CheckCircle2, AlertCircle, Send } from "lucide-react";
 import axios from "axios";
 
-const AUTH_API_URL = "http://localhost:8000/api/auth";
+const AUTH_API_URL = "https://myblogs-fr9t.onrender.com/api/auth";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
