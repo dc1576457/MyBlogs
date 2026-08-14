@@ -1,11 +1,9 @@
-import fs from "fs";
 import path from "path";
-import os from "os";
 import crypto from "crypto";
 import axios from "axios";
 
 const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 /* =========================================================
    URL VALIDATION HELPERS
@@ -65,7 +63,7 @@ export const isPinterestUrl = (value) => {
 };
 
 /* =========================================================
-   YOUTUBE ENGINE (CLOUD / RENDER BYPASS)
+   1. YOUTUBE RESOLVER (CLOUD / RENDER SAFE)
 ========================================================= */
 
 const getYouTubeStreamUrl = async (url, quality = "720") => {
@@ -73,6 +71,7 @@ const getYouTubeStreamUrl = async (url, quality = "720") => {
     "https://api.cobalt.tools",
     "https://cobalt.kwiatekm.pl",
     "https://co.wuk.sh",
+    "https://api.v0.imput.net",
   ];
 
   for (const instance of instances) {
@@ -81,7 +80,7 @@ const getYouTubeStreamUrl = async (url, quality = "720") => {
         `${instance}/`,
         {
           url,
-          videoQuality: String(quality),
+          videoQuality: String(quality) || "720",
           downloadMode: "auto",
         },
         {
@@ -90,7 +89,7 @@ const getYouTubeStreamUrl = async (url, quality = "720") => {
             "Content-Type": "application/json",
             "User-Agent": USER_AGENT,
           },
-          timeout: 8000,
+          timeout: 7000,
         }
       );
 
@@ -98,7 +97,7 @@ const getYouTubeStreamUrl = async (url, quality = "720") => {
         return response.data.url;
       }
     } catch {
-      // try next instance
+      // Continue to next available instance
     }
   }
   return null;
@@ -142,7 +141,7 @@ const extractYouTubeMeta = async (url) => {
 };
 
 /* =========================================================
-   INSTAGRAM FAST SCRAPER
+   2. INSTAGRAM FAST SCRAPER
 ========================================================= */
 
 const extractInstagramData = async (url) => {
@@ -215,7 +214,7 @@ const extractInstagramData = async (url) => {
 };
 
 /* =========================================================
-   FACEBOOK FAST SCRAPER
+   3. FACEBOOK FAST SCRAPER
 ========================================================= */
 
 const extractFacebookData = async (url) => {
@@ -227,9 +226,15 @@ const extractFacebookData = async (url) => {
     });
 
     const html = String(response.data);
-    const hdMatch = html.match(/hd_src\s*:\s*"([^"]+)"/i) || html.match(/"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
-    const sdMatch = html.match(/sd_src\s*:\s*"([^"]+)"/i) || html.match(/"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
-    const thumbMatch = html.match(/thumbnail_src\s*:\s*"([^"]+)"/i) || html.match(/<meta property="og:image" content="([^"]+)"/i);
+    const hdMatch =
+      html.match(/hd_src\s*:\s*"([^"]+)"/i) ||
+      html.match(/"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
+    const sdMatch =
+      html.match(/sd_src\s*:\s*"([^"]+)"/i) ||
+      html.match(/"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/i);
+    const thumbMatch =
+      html.match(/thumbnail_src\s*:\s*"([^"]+)"/i) ||
+      html.match(/<meta property="og:image" content="([^"]+)"/i);
 
     const hdUrl = hdMatch ? hdMatch[1].replace(/\\/g, "").replace(/&amp;/g, "&") : null;
     const sdUrl = sdMatch ? sdMatch[1].replace(/\\/g, "").replace(/&amp;/g, "&") : null;
@@ -257,7 +262,7 @@ const extractFacebookData = async (url) => {
 };
 
 /* =========================================================
-   PINTEREST FAST SCRAPER
+   4. PINTEREST FAST SCRAPER
 ========================================================= */
 
 const extractPinterestData = async (url) => {
@@ -305,7 +310,10 @@ const extractPinterestData = async (url) => {
     }
 
     if (videoMatch && videoMatch[1]) {
-      const cleanVideoUrl = videoMatch[1].replace(/\\u0026/g, "&").replace(/\\/g, "").replace(/&amp;/g, "&");
+      const cleanVideoUrl = videoMatch[1]
+        .replace(/\\u0026/g, "&")
+        .replace(/\\/g, "")
+        .replace(/&amp;/g, "&");
       return {
         id: crypto.randomBytes(8).toString("hex"),
         title,
@@ -325,7 +333,9 @@ const extractPinterestData = async (url) => {
         thumbnail,
         isPhoto: true,
         webpageUrl: targetUrl,
-        formats: [{ height: 1080, filesizeText: "Original High-Res Photo", directUrl: thumbnail }],
+        formats: [
+          { height: 1080, filesizeText: "Original High-Res Photo", directUrl: thumbnail },
+        ],
       };
     }
   } catch (err) {
@@ -389,7 +399,7 @@ export const extractTool = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message: "Unable to extract media. Please ensure the link is publicly accessible.",
+      message: "Unable to extract media. Please ensure the link is public and accessible.",
     });
   } catch (error) {
     return res.status(500).json({
@@ -413,12 +423,12 @@ export const downloadTool = async (req, res) => {
   const numericQuality = Number(quality) || 720;
   let targetDownloadUrl = directUrl;
 
-  // YouTube bypass resolution
+  // Resolve YouTube streams via multi-instance engine
   if (!targetDownloadUrl && isYouTubeUrl(url)) {
     targetDownloadUrl = await getYouTubeStreamUrl(url, numericQuality);
   }
 
-  // Stream directly to browser
+  // Stream proxy
   if (targetDownloadUrl && targetDownloadUrl.startsWith("http")) {
     try {
       const streamResponse = await axios({
@@ -449,12 +459,12 @@ export const downloadTool = async (req, res) => {
 
       return streamResponse.data.pipe(res);
     } catch (streamErr) {
-      console.warn("Direct stream pipe failed:", streamErr.message);
+      console.warn("Direct stream pipe error:", streamErr.message);
     }
   }
 
   return res.status(500).json({
     success: false,
-    message: "Download failed. The media source may be protected or restricted by the platform.",
+    message: "Download failed. The media source is currently rate-limited or private.",
   });
 };
