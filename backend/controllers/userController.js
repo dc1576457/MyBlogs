@@ -484,12 +484,8 @@ export const forgotPassword = async (req, res) => {
     await user.save();
 
     // Reset Link URL
-<<<<<<< HEAD
-    const resetUrl = `${process.env.FRONTEND_URL || "https://my-blogs-beige.vercel.app/"}/reset-password/${resetToken}`;
-=======
-    const resetUrl = `${process.env.FRONTEND_URL || "https://my-blogs-beige.vercel.app"}/reset-password/${resetToken}`;
->>>>>>> 1ba9c1d (Fix deployment and React routing)
 
+    const resetUrl = `${process.env.FRONTEND_URL || "https://my-blogs-beige.vercel.app/"}/reset-password/${resetToken}`;
     const messageHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #ffffff; border-radius: 12px;">
         <h2 style="color: #f97316;">Password Reset Request</h2>
