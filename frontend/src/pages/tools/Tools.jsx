@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import axios from "axios";
 
 const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+  import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
 
 /* =========================================================
    TOOLS DATA
