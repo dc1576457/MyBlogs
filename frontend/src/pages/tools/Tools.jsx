@@ -237,7 +237,7 @@ function Tools() {
     }
   };
 
-  const downloadVideo = async () => {
+const downloadVideo = async () => {
     if (!activeTool || !videoInfo) return;
 
     setError("");
@@ -245,9 +245,9 @@ function Tools() {
     setIsDownloading(true);
     setProgress(10);
 
-    const selectedFormat = videoInfo.formats?.find(
-      (f) => Number(f.height) === Number(selectedQuality)
-    ) || videoInfo.formats?.[0];
+    const selectedFormat =
+      videoInfo.formats?.find((f) => Number(f.height) === Number(selectedQuality)) ||
+      videoInfo.formats?.[0];
 
     try {
       const response = await axios.post(
@@ -282,7 +282,7 @@ function Tools() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const isPhoto = videoInfo.isPhoto || response.headers["content-type"]?.includes("image");
       const ext = isPhoto ? "jpg" : "mp4";
-      const filename = `${activeTool.category}-${selectedQuality || "file"}.${ext}`;
+      const filename = `${activeTool.category}-${selectedQuality || "media"}.${ext}`;
 
       setProgress(100);
       setDownloadResult({
@@ -294,7 +294,21 @@ function Tools() {
         isPhoto,
       });
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Unable to download file.");
+      let message = "Unable to download file.";
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          message = parsed.message || message;
+        } catch {
+          message = err.message || message;
+        }
+      } else if (err.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err.message) {
+        message = err.message;
+      }
+      setError(message);
       setProgress(0);
     } finally {
       setIsDownloading(false);
