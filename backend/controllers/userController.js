@@ -484,7 +484,7 @@ export const forgotPassword = async (req, res) => {
     await user.save();
 
     // Reset Link URL
-    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || "https://my-blogs-beige.vercel.app/"}/reset-password/${resetToken}`;
 
     const messageHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #ffffff; border-radius: 12px;">
