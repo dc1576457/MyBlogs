@@ -5,11 +5,14 @@ import crypto from "crypto";
 import axios from "axios";
 import youtubedl from "youtube-dl-exec";
 
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
 /* =========================================================
    URL VALIDATIONS
 ========================================================= */
 
-const isYouTubeUrl = (value) => {
+export const isYouTubeUrl = (value) => {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
@@ -23,7 +26,7 @@ const isYouTubeUrl = (value) => {
   }
 };
 
-const isFacebookUrl = (value) => {
+export const isFacebookUrl = (value) => {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
@@ -37,20 +40,17 @@ const isFacebookUrl = (value) => {
   }
 };
 
-const isInstagramUrl = (value) => {
+export const isInstagramUrl = (value) => {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    return (
-      hostname === "instagram.com" ||
-      hostname === "m.instagram.com"
-    );
+    return hostname === "instagram.com" || hostname === "m.instagram.com";
   } catch {
     return false;
   }
 };
 
-const isPinterestUrl = (value) => {
+export const isPinterestUrl = (value) => {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
@@ -65,13 +65,6 @@ const isPinterestUrl = (value) => {
   }
 };
 
-/* =========================================================
-   HELPERS & HEADERS
-========================================================= */
-
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
-
 const formatBytes = (bytes) => {
   if (!bytes) return null;
   const value = Number(bytes);
@@ -82,33 +75,31 @@ const formatBytes = (bytes) => {
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
 
-/* =========================================================
-   COMMON YT-DLP OPTIONS (SAFE FOR RENDER)
-========================================================= */
-
-const getCommonOptions = () => {
-  return {
-    noPlaylist: true,
-    noWriteThumbnail: true,
-    noWriteSubs: true,
-    noCheckCertificates: true,
-    restrictFilenames: true,
-    extractorArgs: "youtube:player_client=ios,mweb,android",
-    retries: 3,
-    fragmentRetries: 3,
-    noAbortOnError: true,
-    addHeader: [`User-Agent:${USER_AGENT}`],
-  };
-};
+const getCommonOptions = () => ({
+  noPlaylist: true,
+  noWriteThumbnail: true,
+  noWriteSubs: true,
+  noCheckCertificates: true,
+  restrictFilenames: true,
+  extractorArgs: "youtube:player_client=android,ios,web",
+  retries: 3,
+  fragmentRetries: 3,
+  noAbortOnError: true,
+  addHeader: [`User-Agent:${USER_AGENT}`],
+});
 
 /* =========================================================
-   YOUTUBE OEMBED FALLBACK
+   PLATFORM FALLBACK SCRAPERS
 ========================================================= */
 
+// YouTube oEmbed fallback
 const extractYouTubeOembed = async (url) => {
   try {
     const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
-    const response = await axios.get(oembedUrl, { timeout: 8000 });
+    const response = await axios.get(oembedUrl, {
+      headers: { "User-Agent": USER_AGENT },
+      timeout: 8000,
+    });
     if (response.data) {
       return {
         id: crypto.randomBytes(8).toString("hex"),
@@ -130,11 +121,7 @@ const extractYouTubeOembed = async (url) => {
   return null;
 };
 
-/* =========================================================
-   FAST SCRAPERS (INSTAGRAM, FACEBOOK, PINTEREST)
-========================================================= */
-
-// INSTAGRAM SCRAPER
+// Instagram Scraper
 const extractInstagramFallback = async (url) => {
   try {
     const match = url.match(/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
@@ -145,8 +132,7 @@ const extractInstagramFallback = async (url) => {
     const response = await axios.get(embedUrl, {
       headers: {
         "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
       timeout: 10000,
     });
@@ -154,8 +140,7 @@ const extractInstagramFallback = async (url) => {
     const html = response.data;
     const videoMatch =
       html.match(/"video_url"\s*:\s*"([^"]+)"/i) ||
-      html.match(/<video[^>]+src="([^"]+)"/i) ||
-      html.match(/class="Video"[^>]+src="([^"]+)"/i);
+      html.match(/<video[^>]+src="([^"]+)"/i);
 
     const imgMatch =
       html.match(/"display_url"\s*:\s*"([^"]+)"/i) ||
@@ -191,26 +176,21 @@ const extractInstagramFallback = async (url) => {
         thumbnail: imgUrl,
         isPhoto: true,
         webpageUrl: url,
-        formats: [
-          { height: 1080, filesizeText: "High Quality Photo", directUrl: imgUrl },
-        ],
+        formats: [{ height: 1080, filesizeText: "High Quality Photo", directUrl: imgUrl }],
       };
     }
   } catch (err) {
-    console.error("Instagram fast fallback error:", err.message);
+    console.error("Instagram fallback error:", err.message);
   }
   return null;
 };
 
-// FACEBOOK SCRAPER
+// Facebook Scraper
 const extractFacebookFallback = async (url) => {
   try {
     const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
     const response = await axios.get(embedUrl, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      headers: { "User-Agent": USER_AGENT },
       timeout: 10000,
     });
 
@@ -222,7 +202,6 @@ const extractFacebookFallback = async (url) => {
     const hdUrl = hdMatch ? hdMatch[1].replace(/\\/g, "").replace(/&amp;/g, "&") : null;
     const sdUrl = sdMatch ? sdMatch[1].replace(/\\/g, "").replace(/&amp;/g, "&") : null;
     const thumbUrl = thumbMatch ? thumbMatch[1].replace(/\\/g, "").replace(/&amp;/g, "&") : null;
-
     const videoUrl = hdUrl || sdUrl;
 
     if (videoUrl) {
@@ -240,12 +219,12 @@ const extractFacebookFallback = async (url) => {
       };
     }
   } catch (err) {
-    console.error("Facebook fast fallback error:", err.message);
+    console.error("Facebook fallback error:", err.message);
   }
   return null;
 };
 
-// PINTEREST SCRAPER
+// Pinterest Scraper
 const extractPinterestFallback = async (url) => {
   try {
     let targetUrl = url;
@@ -259,10 +238,7 @@ const extractPinterestFallback = async (url) => {
     }
 
     const response = await axios.get(targetUrl, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      headers: { "User-Agent": USER_AGENT },
       timeout: 10000,
     });
 
@@ -271,7 +247,6 @@ const extractPinterestFallback = async (url) => {
       html.match(/<meta property="og:video" content="([^"]+)"/i) ||
       html.match(/<meta property="og:video:secure_url" content="([^"]+)"/i) ||
       html.match(/<video[^>]+src="([^"]+)"/i) ||
-      html.match(/"V_720P":\s*\{\s*"url":\s*"([^"]+)"/i) ||
       html.match(/"url":\s*"([^"]+\.mp4[^"]*)"/i);
 
     const imageMatch =
@@ -288,7 +263,10 @@ const extractPinterestFallback = async (url) => {
 
     let thumbnail = imageMatch ? imageMatch[1] : null;
     if (thumbnail) {
-      thumbnail = thumbnail.replace(/\/236x\//, "/originals/").replace(/\/474x\//, "/originals/").replace(/\/736x\//, "/originals/");
+      thumbnail = thumbnail
+        .replace(/\/236x\//, "/originals/")
+        .replace(/\/474x\//, "/originals/")
+        .replace(/\/736x\//, "/originals/");
     }
 
     if (videoMatch && videoMatch[1]) {
@@ -312,29 +290,13 @@ const extractPinterestFallback = async (url) => {
         thumbnail,
         isPhoto: true,
         webpageUrl: targetUrl,
-        formats: [
-          { height: 1080, filesizeText: "Original High-Res Photo", directUrl: thumbnail },
-        ],
+        formats: [{ height: 1080, filesizeText: "Original High-Res Photo", directUrl: thumbnail }],
       };
     }
   } catch (err) {
-    console.error("Pinterest fast fallback error:", err.message);
+    console.error("Pinterest fallback error:", err.message);
   }
   return null;
-};
-
-/* =========================================================
-   YOUTUBE FORMAT PROCESSOR
-========================================================= */
-
-const extractVideoInfo = async (url) => {
-  const options = {
-    ...getCommonOptions(),
-    dumpSingleJson: true,
-    skipDownload: true,
-  };
-
-  return await youtubedl(url, options);
 };
 
 const getAvailableFormats = (info) => {
@@ -351,8 +313,8 @@ const getAvailableFormats = (info) => {
     if (!candidates.length) continue;
 
     candidates.sort((a, b) => {
-      const aScore = (a.ext === "mp4" ? 100 : 0) + ((a.acodec && a.acodec !== "none") ? 50 : 0);
-      const bScore = (b.ext === "mp4" ? 100 : 0) + ((b.acodec && b.acodec !== "none") ? 50 : 0);
+      const aScore = (a.ext === "mp4" ? 100 : 0) + (a.acodec && a.acodec !== "none" ? 50 : 0);
+      const bScore = (b.ext === "mp4" ? 100 : 0) + (b.acodec && b.acodec !== "none" ? 50 : 0);
       return bScore - aScore;
     });
 
@@ -389,7 +351,7 @@ const getAvailableFormats = (info) => {
    EXTRACT CONTROLLER
 ========================================================= */
 
-const extractTool = async (req, res) => {
+export const extractTool = async (req, res) => {
   try {
     const { tool, url } = req.body;
 
@@ -406,7 +368,12 @@ const extractTool = async (req, res) => {
       }
 
       try {
-        const info = await extractVideoInfo(cleanUrl);
+        const info = await youtubedl(cleanUrl, {
+          ...getCommonOptions(),
+          dumpSingleJson: true,
+          skipDownload: true,
+        });
+
         const formats = getAvailableFormats(info);
 
         return res.status(200).json({
@@ -441,9 +408,7 @@ const extractTool = async (req, res) => {
         return res.status(400).json({ success: false, message: "Please enter a valid Instagram URL." });
       }
       const instaData = await extractInstagramFallback(cleanUrl);
-      if (instaData) {
-        return res.status(200).json({ success: true, data: instaData });
-      }
+      if (instaData) return res.status(200).json({ success: true, data: instaData });
     }
 
     /* 3. FACEBOOK */
@@ -452,9 +417,7 @@ const extractTool = async (req, res) => {
         return res.status(400).json({ success: false, message: "Please enter a valid Facebook URL." });
       }
       const fbData = await extractFacebookFallback(cleanUrl);
-      if (fbData) {
-        return res.status(200).json({ success: true, data: fbData });
-      }
+      if (fbData) return res.status(200).json({ success: true, data: fbData });
     }
 
     /* 4. PINTEREST */
@@ -463,9 +426,7 @@ const extractTool = async (req, res) => {
         return res.status(400).json({ success: false, message: "Please enter a valid Pinterest URL." });
       }
       const pinData = await extractPinterestFallback(cleanUrl);
-      if (pinData) {
-        return res.status(200).json({ success: true, data: pinData });
-      }
+      if (pinData) return res.status(200).json({ success: true, data: pinData });
     }
 
     /* GENERAL YT-DLP FALLBACK */
@@ -492,7 +453,7 @@ const extractTool = async (req, res) => {
     } catch {
       return res.status(500).json({
         success: false,
-        message: "Unable to extract video details from this link.",
+        message: "Unable to extract media details. Platform link may be private or restricted.",
       });
     }
   } catch (error) {
@@ -508,7 +469,7 @@ const extractTool = async (req, res) => {
    DOWNLOAD CONTROLLER
 ========================================================= */
 
-const downloadTool = async (req, res) => {
+export const downloadTool = async (req, res) => {
   const { tool, url, quality, directUrl } = req.body;
 
   if (!tool || !url) {
@@ -517,8 +478,8 @@ const downloadTool = async (req, res) => {
 
   const numericQuality = Number(quality) || 720;
 
-  /* 1. DIRECT STREAM FOR CDN / PRE-FETCHED LINKS */
-  if (directUrl && directUrl.startsWith("http")) {
+  /* 1. DIRECT STREAM VIA PROXIED REQUEST */
+  if (directUrl && typeof directUrl === "string" && directUrl.startsWith("http")) {
     try {
       const streamResponse = await axios({
         method: "GET",
@@ -526,9 +487,9 @@ const downloadTool = async (req, res) => {
         responseType: "stream",
         headers: {
           "User-Agent": USER_AGENT,
-          Referer: url,
+          Accept: "*/*",
         },
-        timeout: 45000,
+        timeout: 60000,
       });
 
       const contentType = streamResponse.headers["content-type"] || "video/mp4";
@@ -545,12 +506,12 @@ const downloadTool = async (req, res) => {
 
       return streamResponse.data.pipe(res);
     } catch (streamErr) {
-      console.warn("Direct stream failed, attempting fallback:", streamErr.message);
+      console.warn("Direct stream failed, falling back to yt-dlp engine:", streamErr.message);
     }
   }
 
-  /* 2. YT-DLP SAFE FILE DOWNLOAD (WITHOUT REQUIRING FFMPEG) */
-  const tempDir = path.join(os.tmpdir(), "mern-tools-videos");
+  /* 2. YT-DLP SAFE FILE DOWNLOAD */
+  const tempDir = path.join(os.tmpdir(), "mern-tools-downloads");
   await fs.promises.mkdir(tempDir, { recursive: true });
 
   const id = crypto.randomBytes(16).toString("hex");
@@ -558,8 +519,8 @@ const downloadTool = async (req, res) => {
   let filePath = null;
 
   try {
-    // Single-file stream selectors avoid ffmpeg muxing failures on Render
     const format =
+      `bestvideo[height<=${numericQuality}][ext=mp4]+bestaudio[ext=m4a]/` +
       `best[height<=${numericQuality}][ext=mp4]/` +
       `best[height<=${numericQuality}]/` +
       `best[ext=mp4]/best`;
@@ -573,9 +534,7 @@ const downloadTool = async (req, res) => {
     await youtubedl(url, options);
 
     const files = await fs.promises.readdir(tempDir);
-    const outputFile = files.find(
-      (file) => file.startsWith(id) && /\.(mp4|webm|mkv|mov|jpg|jpeg|png)$/i.test(file)
-    );
+    const outputFile = files.find((file) => file.startsWith(id));
 
     if (!outputFile) {
       throw new Error("Failed to create media file on server.");
@@ -588,24 +547,32 @@ const downloadTool = async (req, res) => {
       throw new Error("Downloaded file is empty.");
     }
 
+    const ext = path.extname(outputFile).replace(".", "") || "mp4";
+    const contentType = ext === "jpg" || ext === "png" || ext === "jpeg" ? `image/${ext}` : "video/mp4";
+
     res.status(200);
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Content-Disposition", `attachment; filename="video-${numericQuality}p.mp4"`);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="download-${numericQuality}p.${ext}"`);
     res.setHeader("Content-Length", stats.size);
 
     const stream = fs.createReadStream(filePath);
 
+    const cleanup = async () => {
+      if (filePath) {
+        try {
+          await fs.promises.unlink(filePath);
+        } catch {}
+      }
+    };
+
     stream.on("error", async () => {
-      try { await fs.promises.unlink(filePath); } catch {}
+      await cleanup();
       if (!res.headersSent) {
-        res.status(500).json({ success: false, message: "Unable to stream video file." });
+        res.status(500).json({ success: false, message: "Unable to stream media." });
       }
     });
 
-    stream.on("close", async () => {
-      try { await fs.promises.unlink(filePath); } catch {}
-    });
-
+    stream.on("close", cleanup);
     return stream.pipe(res);
   } catch (error) {
     console.error("VIDEO DOWNLOAD ERROR:", error?.message || error);
@@ -626,13 +593,4 @@ const downloadTool = async (req, res) => {
       });
     }
   }
-};
-
-export {
-  extractTool,
-  downloadTool,
-  isYouTubeUrl,
-  isFacebookUrl,
-  isInstagramUrl,
-  isPinterestUrl,
 };
