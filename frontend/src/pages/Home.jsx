@@ -15,7 +15,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const API_URL = "http://localhost:8000/api/blogs";
+const API_URL = "https://myblogs-fr9t.onrender.com/api/blogs";
 
 export default function Home() {
   const [blogs, setBlogs] = useState([]);
