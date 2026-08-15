@@ -6,10 +6,6 @@ import axios from "axios";
 import ytDlp from "youtube-dl-exec";
 import { logger } from "../utils/logger.js";
 
-/* =========================================================
-   CONSTANTS
-========================================================= */
-
 const TEMP_DIR = path.join(os.tmpdir(), "myblog-tools");
 
 const ensureTempDirectory = () => {
@@ -17,10 +13,6 @@ const ensureTempDirectory = () => {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
   }
 };
-
-/* =========================================================
-   VALIDATE & DETECT PLATFORM
-========================================================= */
 
 const validateUrl = (value) => {
   if (!value || typeof value !== "string") return false;
@@ -78,13 +70,13 @@ const getFormat = (quality) => {
   switch (value) {
     case "360":
     case "360p":
-      return "bestvideo[height<=360]+bestaudio/best[height<=360]/best";
+      return "18/bestvideo[height<=360]+bestaudio/best[height<=360]/best";
     case "480":
     case "480p":
       return "bestvideo[height<=480]+bestaudio/best[height<=480]/best";
     case "720":
     case "720p":
-      return "bestvideo[height<=720]+bestaudio/best[height<=720]/best";
+      return "22/bestvideo[height<=720]+bestaudio/best[height<=720]/best";
     case "1080":
     case "1080p":
       return "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best";
@@ -104,7 +96,7 @@ const getYtDlpErrorMessage = (error) => {
     text.includes("authentication") ||
     text.includes("confirm you're not a bot")
   ) {
-    return "This media requires authentication or is restricted. Only public media is supported.";
+    return "This media requires login/authentication or is bot-protected. Only publicly accessible media is supported.";
   }
   if (text.includes("Private video") || text.includes("private")) {
     return "This content is private and cannot be downloaded.";
@@ -113,7 +105,7 @@ const getYtDlpErrorMessage = (error) => {
     return "The media is unavailable or has been removed.";
   }
   if (text.includes("HTTP Error 403") || text.includes("403 Forbidden")) {
-    return "The server was blocked by the platform (HTTP 403).";
+    return "The media server returned HTTP 403 Forbidden.";
   }
   if (text.includes("HTTP Error 429")) {
     return "Rate limit exceeded. Please try again later.";
@@ -154,7 +146,7 @@ export const extractTool = async (req, res) => {
       });
     }
 
-    logger.info(`TOOL EXTRACT | platform=${detectedPlatform} | url=${url}`);
+    logger?.info?.(`TOOL EXTRACT | platform=${detectedPlatform} | url=${url}`);
 
     const result = await ytDlp(url, {
       dumpSingleJson: true,
@@ -163,6 +155,8 @@ export const extractTool = async (req, res) => {
       skipDownload: true,
       preferFreeFormats: true,
       noCheckCertificates: true,
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     });
 
     if (!result) {
@@ -174,7 +168,6 @@ export const extractTool = async (req, res) => {
 
     const formats = Array.isArray(result.formats) ? result.formats : [];
 
-    // Detect if the target is an image/photo (Instagram/Pinterest image)
     const isPhoto =
       result._type === "image" ||
       result.ext === "jpg" ||
@@ -201,6 +194,7 @@ export const extractTool = async (req, res) => {
         title: result.title || "Untitled Media",
         description: result.description || "",
         thumbnail: result.thumbnail || result.url || null,
+        url: result.url || null,
         duration: result.duration || 0,
         uploader: result.uploader || result.channel || null,
         platform: detectedPlatform,
@@ -210,8 +204,7 @@ export const extractTool = async (req, res) => {
         qualities: availableQualities,
         formats: formats
           .filter(
-            (item) =>
-              item && (item.vcodec !== "none" || item.acodec !== "none")
+            (item) => item && (item.vcodec !== "none" || item.acodec !== "none")
           )
           .map((item) => ({
             formatId: item.format_id || null,
@@ -221,6 +214,7 @@ export const extractTool = async (req, res) => {
             width: item.width || null,
             fps: item.fps || null,
             filesize: item.filesize || item.filesize_approx || null,
+            directUrl: item.url || null,
             hasVideo: Boolean(item.vcodec && item.vcodec !== "none"),
             hasAudio: Boolean(item.acodec && item.acodec !== "none"),
           }))
@@ -229,7 +223,7 @@ export const extractTool = async (req, res) => {
     });
   } catch (error) {
     const message = getYtDlpErrorMessage(error);
-    logger.error(`TOOL EXTRACT ERROR: ${message}`);
+    logger?.error?.(`TOOL EXTRACT ERROR: ${message}`);
     return res.status(500).json({
       success: false,
       message,
@@ -238,7 +232,7 @@ export const extractTool = async (req, res) => {
 };
 
 /* =========================================================
-   DOWNLOAD TOOL
+   DOWNLOAD TOOL (FAST STREAMING + YT-DLP FALLBACK)
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
@@ -262,45 +256,55 @@ export const downloadTool = async (req, res) => {
     const cleanBaseTitle = cleanFileName(title);
 
     /* --------------------------------------------------------
-       1. DIRECT PHOTO DOWNLOAD (Images from Pinterest/Instagram)
+       1. FAST DIRECT STREAM (For Photos & Direct MP4 URLs)
     -------------------------------------------------------- */
-    if (isPhoto || directUrl) {
-      const targetPhotoUrl = directUrl || sourceUrl;
+    const candidateDirectUrl = directUrl || (isPhoto ? sourceUrl : null);
+
+    if (candidateDirectUrl && validateUrl(candidateDirectUrl)) {
       try {
-        const photoResponse = await axios.get(targetPhotoUrl, {
+        const streamResponse = await axios({
+          method: "GET",
+          url: candidateDirectUrl,
           responseType: "stream",
           timeout: 60000,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          },
         });
 
         const contentType =
-          photoResponse.headers["content-type"] || "image/jpeg";
-        let ext = ".jpg";
+          streamResponse.headers["content-type"] || "application/octet-stream";
+
+        let ext = isPhoto ? ".jpg" : ".mp4";
         if (contentType.includes("png")) ext = ".png";
-        if (contentType.includes("webp")) ext = ".webp";
+        else if (contentType.includes("webp")) ext = ".webp";
+        else if (contentType.includes("webm")) ext = ".webm";
 
         const finalName = `${cleanBaseTitle}${ext}`;
 
         res.status(200);
         res.setHeader("Content-Type", contentType);
-        if (photoResponse.headers["content-length"]) {
+        if (streamResponse.headers["content-length"]) {
           res.setHeader(
             "Content-Length",
-            photoResponse.headers["content-length"]
+            streamResponse.headers["content-length"]
           );
         }
         res.setHeader(
           "Content-Disposition",
           `attachment; filename="${encodeURIComponent(finalName)}"`
         );
+        res.setHeader("Cache-Control", "no-store");
 
-        return photoResponse.data.pipe(res);
-      } catch {
-        // Fallback to yt-dlp if axios stream fails
+        return streamResponse.data.pipe(res);
+      } catch (streamErr) {
+        logger?.warn?.(`Direct stream failed, falling back to yt-dlp: ${streamErr.message}`);
       }
     }
 
     /* --------------------------------------------------------
-       2. VIDEO DOWNLOAD VIA YT-DLP
+       2. FAST YT-DLP EXECUTION WITH OPTIMIZED FLAGS
     -------------------------------------------------------- */
     const baseFile = path.join(TEMP_DIR, `download-${requestId}`);
 
@@ -313,7 +317,7 @@ export const downloadTool = async (req, res) => {
       selectedFormat = getFormat(quality);
     }
 
-    logger.info(`TOOL DOWNLOAD START: url=${sourceUrl} | format=${selectedFormat}`);
+    logger?.info?.(`TOOL DOWNLOAD START: url=${sourceUrl} | format=${selectedFormat}`);
 
     await ytDlp(sourceUrl, {
       output: `${baseFile}.%(ext)s`,
@@ -324,6 +328,11 @@ export const downloadTool = async (req, res) => {
       mergeOutputFormat: "mp4",
       maxFilesize: "500M",
       retries: 3,
+      fragmentRetries: 3,
+      concurrentFragments: 5,
+      bufferSize: "16K",
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     });
 
     const files = await fs.promises.readdir(TEMP_DIR);
@@ -375,7 +384,7 @@ export const downloadTool = async (req, res) => {
     const readStream = fs.createReadStream(outputFile);
 
     readStream.on("error", async (err) => {
-      logger.error(`Stream error: ${err.message}`);
+      logger?.error?.(`Stream error: ${err.message}`);
       await removeFile(outputFile);
       if (!res.headersSent) {
         return res.status(500).json({
@@ -394,7 +403,7 @@ export const downloadTool = async (req, res) => {
   } catch (error) {
     if (outputFile) await removeFile(outputFile);
     const message = getYtDlpErrorMessage(error);
-    logger.error(`TOOL DOWNLOAD ERROR: ${message}`);
+    logger?.error?.(`TOOL DOWNLOAD ERROR: ${message}`);
 
     if (res.headersSent) {
       return res.destroy(error);
