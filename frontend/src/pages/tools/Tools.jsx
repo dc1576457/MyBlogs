@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import axios from "axios";
 
 /* =========================================================
@@ -6,12 +11,12 @@ import axios from "axios";
 ========================================================= */
 
 const RAW_API_URL =
-  import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
+  import.meta.env.VITE_API_URL ||
+  "https://myblogs-fr9t.onrender.com/api";
 
-const API_BASE_URL = RAW_API_URL.replace(/^http:\/\//i, "https://").replace(
-  /\/+$/,
-  ""
-);
+const API_BASE_URL = RAW_API_URL
+  .replace(/^http:\/\//i, "https://")
+  .replace(/\/+$/, "");
 
 /* =========================================================
    TOOLS DATA
@@ -26,18 +31,23 @@ const toolsData = [
       "Extract available video qualities and download public YouTube videos fast.",
     category: "YouTube",
     icon: "▶",
-    gradient: "from-red-500 via-rose-500 to-pink-600",
-    badgeColor: "bg-red-500/10 text-red-400 border-red-500/20",
+    gradient:
+      "from-red-500 via-rose-500 to-pink-600",
+    badgeColor:
+      "bg-red-500/10 text-red-400 border-red-500/20",
   },
   {
     id: 2,
     name: "Facebook Video Downloader",
     slug: "facebook-video-downloader",
-    description: "Download publicly accessible Facebook videos in HD and SD.",
+    description:
+      "Download publicly accessible Facebook videos in HD and SD.",
     category: "Facebook",
     icon: "f",
-    gradient: "from-blue-500 via-indigo-500 to-cyan-500",
-    badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    gradient:
+      "from-blue-500 via-indigo-500 to-cyan-500",
+    badgeColor:
+      "bg-blue-500/10 text-blue-400 border-blue-500/20",
   },
   {
     id: 3,
@@ -47,8 +57,10 @@ const toolsData = [
       "Download publicly accessible Instagram Reels, videos, and photos.",
     category: "Instagram",
     icon: "◎",
-    gradient: "from-fuchsia-500 via-pink-500 to-orange-400",
-    badgeColor: "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20",
+    gradient:
+      "from-fuchsia-500 via-pink-500 to-orange-400",
+    badgeColor:
+      "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20",
   },
   {
     id: 4,
@@ -58,66 +70,109 @@ const toolsData = [
       "Download public Pinterest videos and high-resolution photos instantly.",
     category: "Pinterest",
     icon: "P",
-    gradient: "from-red-600 via-rose-600 to-red-500",
-    badgeColor: "bg-red-600/10 text-red-400 border-red-600/20",
+    gradient:
+      "from-red-600 via-rose-600 to-red-500",
+    badgeColor:
+      "bg-red-600/10 text-red-400 border-red-600/20",
   },
 ];
 
-const categories = ["All", "YouTube", "Facebook", "Instagram", "Pinterest"];
+const categories = [
+  "All",
+  "YouTube",
+  "Facebook",
+  "Instagram",
+  "Pinterest",
+];
+
+/* =========================================================
+   ONLY TWO QUALITY OPTIONS
+========================================================= */
 
 const QUALITY_OPTIONS = [
-  { value: 360, label: "360p" },
-  { value: 480, label: "480p" },
-  { value: 720, label: "720p HD" },
-  { value: 1080, label: "1080p Full HD" },
+  {
+    value: 360,
+    label: "360p",
+  },
+  {
+    value: 720,
+    label: "720p HD",
+  },
 ];
 
 /* =========================================================
    URL VALIDATION
 ========================================================= */
 
-const validatePlatformUrl = (value, slug) => {
+const validatePlatformUrl = (
+  value,
+  slug
+) => {
   try {
-    if (!value?.trim()) return false;
+    if (!value?.trim()) {
+      return false;
+    }
 
-    const parsed = new URL(value.trim());
+    const parsed =
+      new URL(value.trim());
 
-    const hostname = parsed.hostname
-      .toLowerCase()
-      .replace(/^www\./, "");
+    const hostname =
+      parsed.hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
 
-    if (slug === "youtube-video-downloader") {
+    if (
+      slug ===
+      "youtube-video-downloader"
+    ) {
       return (
         hostname === "youtube.com" ||
         hostname === "m.youtube.com" ||
         hostname === "youtu.be" ||
-        hostname.endsWith(".youtube.com")
+        hostname.endsWith(
+          ".youtube.com"
+        )
       );
     }
 
-    if (slug === "facebook-video-downloader") {
+    if (
+      slug ===
+      "facebook-video-downloader"
+    ) {
       return (
         hostname === "facebook.com" ||
         hostname === "m.facebook.com" ||
         hostname === "fb.watch" ||
-        hostname.endsWith(".facebook.com")
+        hostname.endsWith(
+          ".facebook.com"
+        )
       );
     }
 
-    if (slug === "instagram-video-downloader") {
+    if (
+      slug ===
+      "instagram-video-downloader"
+    ) {
       return (
         hostname === "instagram.com" ||
         hostname === "m.instagram.com" ||
-        hostname.endsWith(".instagram.com")
+        hostname.endsWith(
+          ".instagram.com"
+        )
       );
     }
 
-    if (slug === "pinterest-downloader") {
+    if (
+      slug ===
+      "pinterest-downloader"
+    ) {
       return (
         hostname === "pinterest.com" ||
         hostname === "m.pinterest.com" ||
         hostname === "pin.it" ||
-        hostname.endsWith(".pinterest.com")
+        hostname.endsWith(
+          ".pinterest.com"
+        )
       );
     }
 
@@ -131,54 +186,104 @@ const validatePlatformUrl = (value, slug) => {
    FORMAT BYTES
 ========================================================= */
 
-const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(Number(bytes))) {
+const formatBytes = (
+  bytes
+) => {
+  if (
+    !bytes ||
+    Number.isNaN(
+      Number(bytes)
+    )
+  ) {
     return "Size unknown";
   }
 
-  const value = Number(bytes);
+  const value =
+    Number(bytes);
 
-  if (value <= 0) return "Ready";
+  if (value <= 0) {
+    return "Ready";
+  }
 
-  if (value < 1024) {
+  if (
+    value <
+    1024
+  ) {
     return `${value} B`;
   }
 
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
+  if (
+    value <
+    1024 * 1024
+  ) {
+    return `${(
+      value / 1024
+    ).toFixed(1)} KB`;
   }
 
-  if (value < 1024 * 1024 * 1024) {
-    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  if (
+    value <
+    1024 *
+      1024 *
+      1024
+  ) {
+    return `${(
+      value /
+      1024 /
+      1024
+    ).toFixed(1)} MB`;
   }
 
-  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  return `${(
+    value /
+    1024 /
+    1024 /
+    1024
+  ).toFixed(2)} GB`;
 };
 
 /* =========================================================
-   FILENAME FROM HEADERS
+   FILENAME
 ========================================================= */
 
-const getFilenameFromHeaders = (headers, fallback) => {
+const getFilenameFromHeaders = (
+  headers,
+  fallback
+) => {
   try {
-    const disposition = headers?.["content-disposition"];
+    const disposition =
+      headers?.[
+        "content-disposition"
+      ];
 
-    if (!disposition) return fallback;
-
-    const utfMatch = disposition.match(
-      /filename\*=UTF-8''([^;]+)/i
-    );
-
-    if (utfMatch?.[1]) {
-      return decodeURIComponent(utfMatch[1]);
+    if (!disposition) {
+      return fallback;
     }
 
-    const normalMatch = disposition.match(
-      /filename="?([^"]+)"?/i
-    );
+    const utfMatch =
+      disposition.match(
+        /filename\*=UTF-8''([^;]+)/i
+      );
 
-    if (normalMatch?.[1]) {
-      return decodeURIComponent(normalMatch[1]);
+    if (
+      utfMatch?.[1]
+    ) {
+      return decodeURIComponent(
+        utfMatch[1]
+      );
+    }
+
+    const normalMatch =
+      disposition.match(
+        /filename="?([^"]+)"?/i
+      );
+
+    if (
+      normalMatch?.[1]
+    ) {
+      return decodeURIComponent(
+        normalMatch[1]
+      );
     }
 
     return fallback;
@@ -188,808 +293,973 @@ const getFilenameFromHeaders = (headers, fallback) => {
 };
 
 /* =========================================================
-   AXIOS ERROR MESSAGE
+   AXIOS ERROR
 ========================================================= */
 
-const getAxiosErrorMessage = async (error) => {
-  if (
-    error?.response?.data &&
-    !(error.response.data instanceof Blob)
-  ) {
-    return (
-      error.response.data.message ||
-      error.response.data.error ||
-      "Request failed."
-    );
-  }
-
-  if (error?.response?.data instanceof Blob) {
-    try {
-      const text = await error.response.data.text();
-
-      if (text) {
-        try {
-          const json = JSON.parse(text);
-
-          return (
-            json?.message ||
-            json?.error ||
-            text
-          );
-        } catch {
-          return text;
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (error?.code === "ECONNABORTED") {
-    return "Server request timed out. Please try again.";
-  }
-
-  if (error?.code === "ERR_NETWORK") {
-    return "Network error. Please check your connection and try again.";
-  }
-
-  return error?.message || "Something went wrong.";
-};
-
-/* =========================================================
-   MAIN COMPONENT
-========================================================= */
-
-function Tools() {
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
-
-  const [activeTool, setActiveTool] = useState(null);
-
-  const [inputValue, setInputValue] = useState("");
-
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const [progress, setProgress] = useState(0);
-
-  const [progressStage, setProgressStage] = useState("");
-
-  const [error, setError] = useState("");
-
-  const [videoInfo, setVideoInfo] = useState(null);
-
-  const [selectedQuality, setSelectedQuality] = useState(null);
-
-  const [downloadResult, setDownloadResult] = useState(null);
-
-  /* =========================================================
-     PROGRESS TIMER REF
-  ========================================================= */
-
-  const progressTimerRef = useRef(null);
-
-  /* =========================================================
-     CLEAR PROGRESS TIMER
-  ========================================================= */
-
-  const clearProgressTimer = () => {
-    if (progressTimerRef.current) {
-      clearInterval(progressTimerRef.current);
-      progressTimerRef.current = null;
-    }
-  };
-
-  /* =========================================================
-     SMOOTH PROGRESS
-     
-     IMPORTANT:
-     This is frontend progress.
-     It stops at 90% until backend responds.
-  ========================================================= */
-
-  const startSmoothProgress = (
-    startValue = 5,
-    maxValue = 90,
-    speed = 900
-  ) => {
-    clearProgressTimer();
-
-    setProgress(startValue);
-
-    progressTimerRef.current = setInterval(() => {
-      setProgress((current) => {
-        if (current >= maxValue) {
-          return current;
-        }
-
-        const remaining = maxValue - current;
-
-        const increment =
-          remaining > 40
-            ? 3
-            : remaining > 20
-            ? 2
-            : 1;
-
-        return Math.min(
-          current + increment,
-          maxValue
-        );
-      });
-    }, speed);
-  };
-
-  /* =========================================================
-     COMPLETE PROGRESS
-  ========================================================= */
-
-  const completeProgress = () => {
-    clearProgressTimer();
-
-    setProgress(100);
-  };
-
-  /* =========================================================
-     CLEANUP
-  ========================================================= */
-
-  useEffect(() => {
-    return () => {
-      clearProgressTimer();
-    };
-  }, []);
-
-  /* =========================================================
-     FILTER TOOLS
-  ========================================================= */
-
-  const filteredTools = useMemo(() => {
-    const text = search.toLowerCase().trim();
-
-    return toolsData.filter((tool) => {
-      const matchesSearch =
-        !text ||
-        tool.name.toLowerCase().includes(text) ||
-        tool.description.toLowerCase().includes(text) ||
-        tool.category.toLowerCase().includes(text);
-
-      const matchesCategory =
-        category === "All" ||
-        tool.category === category;
-
-      return matchesSearch && matchesCategory;
-    });
-  }, [search, category]);
-
-  /* =========================================================
-     OPEN TOOL
-  ========================================================= */
-
-  const openTool = (tool) => {
-    clearProgressTimer();
-
-    setActiveTool(tool);
-
-    setInputValue("");
-
-    setError("");
-
-    setProgress(0);
-
-    setProgressStage("");
-
-    setVideoInfo(null);
-
-    setSelectedQuality(null);
-
-    setDownloadResult(null);
-
-    setIsExtracting(false);
-
-    setIsDownloading(false);
-  };
-
-  /* =========================================================
-     CLOSE MODAL
-  ========================================================= */
-
-  const closeModal = () => {
-    if (isExtracting || isDownloading) {
-      return;
+const getAxiosErrorMessage =
+  async (error) => {
+    if (
+      error?.response?.data &&
+      !(
+        error.response.data instanceof
+        Blob
+      )
+    ) {
+      return (
+        error.response.data
+          .message ||
+        error.response.data
+          .error ||
+        "Request failed."
+      );
     }
 
-    clearProgressTimer();
-
-    if (downloadResult?.downloadUrl) {
+    if (
+      error?.response?.data instanceof
+      Blob
+    ) {
       try {
-        window.URL.revokeObjectURL(
-          downloadResult.downloadUrl
-        );
+        const text =
+          await error.response.data.text();
+
+        if (text) {
+          try {
+            const json =
+              JSON.parse(text);
+
+            return (
+              json?.message ||
+              json?.error ||
+              text
+            );
+          } catch {
+            return text;
+          }
+        }
       } catch {
         // Ignore
       }
     }
 
-    setActiveTool(null);
+    if (
+      error?.code ===
+      "ECONNABORTED"
+    ) {
+      return "Server request timed out. Please try again.";
+    }
 
+    return (
+      error?.message ||
+      "Something went wrong."
+    );
+  };
+
+/* =========================================================
+   MAIN
+========================================================= */
+
+function Tools() {
+  const [
+    search,
+    setSearch,
+  ] = useState("");
+
+  const [
+    category,
+    setCategory,
+  ] = useState("All");
+
+  const [
+    activeTool,
+    setActiveTool,
+  ] = useState(null);
+
+  const [
+    inputValue,
+    setInputValue,
+  ] = useState("");
+
+  const [
+    isExtracting,
+    setIsExtracting,
+  ] = useState(false);
+
+  const [
+    isDownloading,
+    setIsDownloading,
+  ] = useState(false);
+
+  const [
+    progress,
+    setProgress,
+  ] = useState(0);
+
+  const [
+    progressStage,
+    setProgressStage,
+  ] = useState("");
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    videoInfo,
+    setVideoInfo,
+  ] = useState(null);
+
+  const [
+    selectedQuality,
+    setSelectedQuality,
+  ] = useState(null);
+
+  const [
+    downloadResult,
+    setDownloadResult,
+  ] = useState(null);
+
+  const progressTimer =
+    useRef(null);
+
+  /* =========================================================
+     CLEAN TIMER
+  ========================================================= */
+
+  const clearProgressTimer =
+    () => {
+      if (
+        progressTimer.current
+      ) {
+        clearInterval(
+          progressTimer.current
+        );
+
+        progressTimer.current =
+          null;
+      }
+    };
+
+  useEffect(() => {
+    return () => {
+      clearProgressTimer();
+
+      if (
+        downloadResult?.downloadUrl
+      ) {
+        try {
+          window.URL.revokeObjectURL(
+            downloadResult.downloadUrl
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    };
+  }, [
+    downloadResult?.downloadUrl,
+  ]);
+
+  /* =========================================================
+     SMOOTH EXTRACTION PROGRESS
+  ========================================================= */
+
+  const startExtractionProgress =
+    () => {
+      clearProgressTimer();
+
+      setProgress(8);
+
+      progressTimer.current =
+        setInterval(() => {
+          setProgress(
+            (current) => {
+              if (
+                current >= 88
+              ) {
+                return current;
+              }
+
+              const increase =
+                current < 30
+                  ? 4
+                  : current < 60
+                  ? 2
+                  : 1;
+
+              return Math.min(
+                current +
+                  increase,
+                88
+              );
+            }
+          );
+        }, 500);
+    };
+
+  const finishProgress =
+    () => {
+      clearProgressTimer();
+
+      setProgress(100);
+    };
+
+  /* =========================================================
+     FILTER
+  ========================================================= */
+
+  const filteredTools =
+    useMemo(() => {
+      const text =
+        search
+          .toLowerCase()
+          .trim();
+
+      return toolsData.filter(
+        (tool) => {
+          const matchesSearch =
+            !text ||
+            tool.name
+              .toLowerCase()
+              .includes(text) ||
+            tool.description
+              .toLowerCase()
+              .includes(text) ||
+            tool.category
+              .toLowerCase()
+              .includes(text);
+
+          const matchesCategory =
+            category ===
+              "All" ||
+            tool.category ===
+              category;
+
+          return (
+            matchesSearch &&
+            matchesCategory
+          );
+        }
+      );
+    }, [
+      search,
+      category,
+    ]);
+
+  /* =========================================================
+     OPEN
+  ========================================================= */
+
+  const openTool = (
+    tool
+  ) => {
+    clearProgressTimer();
+
+    setActiveTool(tool);
     setInputValue("");
-
     setError("");
-
     setProgress(0);
-
     setProgressStage("");
-
     setVideoInfo(null);
-
     setSelectedQuality(null);
-
     setDownloadResult(null);
-
     setIsExtracting(false);
-
     setIsDownloading(false);
   };
 
   /* =========================================================
-     EXTRACT MEDIA
+     CLOSE
   ========================================================= */
 
-  const extractVideo = async (event) => {
-    event.preventDefault();
-
-    if (!activeTool) return;
-
-    setError("");
-
-    setVideoInfo(null);
-
-    setSelectedQuality(null);
-
-    setDownloadResult(null);
-
-    setIsExtracting(true);
-
-    setProgressStage("Preparing extraction...");
-
-    startSmoothProgress(5, 90, 700);
-
-    const cleanUrl = inputValue.trim();
-
-    if (!cleanUrl) {
-      clearProgressTimer();
-
-      setError("Please enter a URL.");
-
-      setProgress(0);
-
-      setProgressStage("");
-
-      setIsExtracting(false);
-
-      return;
-    }
-
-    if (
-      !validatePlatformUrl(
-        cleanUrl,
-        activeTool.slug
-      )
-    ) {
-      clearProgressTimer();
-
-      setError(
-        `Please enter a valid ${activeTool.category} URL.`
-      );
-
-      setProgress(0);
-
-      setProgressStage("");
-
-      setIsExtracting(false);
-
-      return;
-    }
-
-    setProgressStage(
-      `Connecting to ${activeTool.category}...`
-    );
-
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/tools/extract`,
-        {
-          tool: activeTool.slug,
-
-          platform:
-            activeTool.category.toLowerCase(),
-
-          url: cleanUrl,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          timeout: 120000,
-        }
-      );
-
-      setProgressStage(
-        "Processing media information..."
-      );
-
-      if (!response?.data?.success) {
-        throw new Error(
-          response?.data?.message ||
-            "Unable to extract media information."
-        );
-      }
-
-      const data =
-        response.data.data ||
-        response.data;
-
-      if (!data) {
-        throw new Error(
-          "No media information returned by server."
-        );
-      }
-
-      setProgressStage("Extraction completed.");
-
-      completeProgress();
-
-      setVideoInfo(data);
-
-      if (data.isPhoto === true) {
-        setSelectedQuality(null);
-
+  const closeModal =
+    () => {
+      if (
+        isExtracting ||
+        isDownloading
+      ) {
         return;
       }
 
-      const availableFormats =
-        Array.isArray(data.formats)
-          ? data.formats
-          : [];
-
-      const availableHeights =
-        availableFormats
-          .map((item) =>
-            Number(item?.height)
-          )
-          .filter(
-            (height) =>
-              Number.isFinite(height) &&
-              height > 0
-          );
-
-      const uniqueHeights = [
-        ...new Set(availableHeights),
-      ];
-
-      const preferredQuality = [
-        720,
-        360,
-        480,
-        1080,
-      ].find((quality) =>
-        uniqueHeights.includes(quality)
-      );
-
-      if (preferredQuality) {
-        setSelectedQuality(
-          preferredQuality
-        );
-      } else if (uniqueHeights.length > 0) {
-        setSelectedQuality(
-          Math.max(...uniqueHeights)
-        );
-      } else {
-        setSelectedQuality(720);
-      }
-    } catch (err) {
       clearProgressTimer();
-
-      const message =
-        await getAxiosErrorMessage(err);
-
-      setError(
-        message ||
-          "Unable to extract media."
-      );
-
-      setProgress(0);
-
-      setProgressStage("");
-
-      setVideoInfo(null);
-
-      setSelectedQuality(null);
-    } finally {
-      clearProgressTimer();
-
-      setIsExtracting(false);
-    }
-  };
-
-  /* =========================================================
-     DOWNLOAD MEDIA
-  ========================================================= */
-
-  const downloadVideo = async () => {
-    if (
-      !activeTool ||
-      !videoInfo ||
-      isDownloading ||
-      isExtracting
-    ) {
-      return;
-    }
-
-    const cleanUrl = inputValue.trim();
-
-    if (!cleanUrl) {
-      setError("Original URL is missing.");
-      return;
-    }
-
-    setError("");
-
-    setDownloadResult(null);
-
-    setIsDownloading(true);
-
-    setProgressStage(
-      "Preparing download..."
-    );
-
-    startSmoothProgress(5, 90, 700);
-
-    const selectedFormat =
-      Array.isArray(videoInfo.formats)
-        ? videoInfo.formats.find(
-            (format) =>
-              Number(format?.height) ===
-              Number(selectedQuality)
-          )
-        : null;
-
-    const payload = {
-      tool: activeTool.slug,
-
-      platform:
-        activeTool.category.toLowerCase(),
-
-      url: cleanUrl,
-
-      quality:
-        selectedQuality || 720,
-
-      format: selectedQuality
-        ? `${selectedQuality}p`
-        : "720p",
-
-      formatId:
-        selectedFormat?.formatId ||
-        String(
-          selectedQuality || "720"
-        ),
-
-      title:
-        videoInfo.title ||
-        `${activeTool.category}-media`,
-
-      isPhoto: Boolean(
-        videoInfo.isPhoto
-      ),
-
-      directUrl: videoInfo.isPhoto
-        ? videoInfo.thumbnail ||
-          videoInfo.url
-        : selectedFormat?.directUrl ||
-          null,
-    };
-
-    try {
-      setProgressStage(
-        "Connecting to download server..."
-      );
-
-      const response = await axios.post(
-        `${API_BASE_URL}/tools/download`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          responseType: "blob",
-
-          timeout: 120000,
-
-          onDownloadProgress:
-            (progressEvent) => {
-              if (progressEvent.total) {
-                const percent = Math.round(
-                  (progressEvent.loaded *
-                    100) /
-                    progressEvent.total
-                );
-
-                setProgressStage(
-                  `Downloading file... ${Math.min(
-                    percent,
-                    99
-                  )}%`
-                );
-
-                setProgress(
-                  Math.min(percent, 99)
-                );
-              } else {
-                /*
-                  If server does not send
-                  Content-Length, smoothly
-                  increase until 90%.
-                */
-
-                setProgressStage(
-                  "Downloading file..."
-                );
-
-                setProgress(
-                  (current) =>
-                    current < 90
-                      ? Math.min(
-                          current + 1,
-                          90
-                        )
-                      : current
-                );
-              }
-            },
-        }
-      );
-
-      const contentType =
-        response.headers[
-          "content-type"
-        ] || "";
-
-      /* =====================================================
-         JSON RESPONSE
-      ===================================================== */
 
       if (
-        contentType.includes(
-          "application/json"
-        )
+        downloadResult?.downloadUrl
       ) {
-        const text =
-          await response.data.text();
-
-        let json = {};
-
         try {
-          json = JSON.parse(text);
+          window.URL.revokeObjectURL(
+            downloadResult.downloadUrl
+          );
         } catch {
           // Ignore
         }
+      }
 
-        if (json.downloadUrl) {
-          setProgressStage(
-            "Download ready."
+      setActiveTool(null);
+      setInputValue("");
+      setError("");
+      setProgress(0);
+      setProgressStage("");
+      setVideoInfo(null);
+      setSelectedQuality(null);
+      setDownloadResult(null);
+      setIsExtracting(false);
+      setIsDownloading(false);
+    };
+
+  /* =========================================================
+     EXTRACT
+  ========================================================= */
+
+  const extractVideo =
+    async (event) => {
+      event.preventDefault();
+
+      if (!activeTool) {
+        return;
+      }
+
+      setError("");
+      setVideoInfo(null);
+      setSelectedQuality(null);
+      setDownloadResult(null);
+      setProgressStage(
+        `Connecting to ${activeTool.category}...`
+      );
+
+      const cleanUrl =
+        inputValue.trim();
+
+      if (!cleanUrl) {
+        setError(
+          "Please enter a URL."
+        );
+        setProgress(0);
+        return;
+      }
+
+      if (
+        !validatePlatformUrl(
+          cleanUrl,
+          activeTool.slug
+        )
+      ) {
+        setError(
+          `Please enter a valid ${activeTool.category} URL.`
+        );
+        setProgress(0);
+        return;
+      }
+
+      setIsExtracting(true);
+
+      startExtractionProgress();
+
+      try {
+        const response =
+          await axios.post(
+            `${API_BASE_URL}/tools/extract`,
+            {
+              tool:
+                activeTool.slug,
+
+              platform:
+                activeTool.category.toLowerCase(),
+
+              url:
+                cleanUrl,
+            },
+            {
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              timeout: 180000,
+            }
           );
 
-          completeProgress();
+        setProgressStage(
+          "Processing media information..."
+        );
 
-          setDownloadResult({
-            success: true,
+        if (
+          !response?.data?.success
+        ) {
+          throw new Error(
+            response?.data?.message ||
+              "Unable to extract media information."
+          );
+        }
 
-            downloadUrl:
-              json.downloadUrl,
+        const data =
+          response.data.data ||
+          response.data;
 
-            filename:
-              json.filename ||
-              `${activeTool.category.toLowerCase()}-video.mp4`,
+        if (!data) {
+          throw new Error(
+            "No media information returned by server."
+          );
+        }
 
-            quality:
-              selectedQuality || 720,
+        setVideoInfo(data);
 
-            size:
-              json.size || 0,
+        /*
+         * PHOTO
+         */
 
-            isPhoto: Boolean(
-              videoInfo.isPhoto
-            ),
-          });
+        if (
+          data.isPhoto === true
+        ) {
+          setSelectedQuality(
+            null
+          );
+
+          setProgressStage(
+            "Photo extraction completed."
+          );
+
+          finishProgress();
 
           return;
         }
 
-        throw new Error(
-          json?.message ||
-            "Download failed. Please try another quality."
-        );
-      }
+        /*
+         * ONLY 360 + 720
+         */
 
-      /* =====================================================
-         BLOB RESPONSE
-      ===================================================== */
+        const formats =
+          Array.isArray(
+            data.formats
+          )
+            ? data.formats
+            : [];
 
-      const blob =
-        response.data instanceof Blob
-          ? response.data
-          : new Blob(
-              [response.data],
-              {
-                type:
-                  contentType ||
-                  "application/octet-stream",
-              }
+        const heights =
+          formats
+            .map((item) =>
+              Number(
+                item?.height
+              )
+            )
+            .filter(
+              (height) =>
+                Number.isFinite(
+                  height
+                ) &&
+                height > 0
             );
 
-      if (!blob || blob.size <= 0) {
-        throw new Error(
-          "Downloaded file is empty."
+        /*
+         * Prefer 720,
+         * then 360.
+         */
+
+        if (
+          heights.includes(720)
+        ) {
+          setSelectedQuality(
+            720
+          );
+        } else if (
+          heights.includes(360)
+        ) {
+          setSelectedQuality(
+            360
+          );
+        } else if (
+          heights.length
+        ) {
+          setSelectedQuality(
+            Math.max(
+              ...heights
+            )
+          );
+        } else {
+          setSelectedQuality(
+            720
+          );
+        }
+
+        setProgressStage(
+          "Extraction completed."
         );
+
+        finishProgress();
+      } catch (err) {
+        clearProgressTimer();
+
+        const message =
+          await getAxiosErrorMessage(
+            err
+          );
+
+        setError(
+          message ||
+            "Unable to extract media."
+        );
+
+        setProgress(0);
+        setProgressStage("");
+        setVideoInfo(null);
+        setSelectedQuality(null);
+      } finally {
+        clearProgressTimer();
+
+        setIsExtracting(false);
       }
+    };
 
-      const isPhoto =
-        videoInfo?.isPhoto === true ||
-        contentType.includes("image/");
+  /* =========================================================
+     DOWNLOAD
+  ========================================================= */
 
-      let fallbackExtension =
-        isPhoto
-          ? "jpg"
-          : "mp4";
-
+  const downloadVideo =
+    async () => {
       if (
-        contentType.includes("png")
+        !activeTool ||
+        !videoInfo ||
+        isDownloading ||
+        isExtracting
       ) {
-        fallbackExtension = "png";
-      } else if (
-        contentType.includes("webp")
-      ) {
-        fallbackExtension = "webp";
-      } else if (
-        contentType.includes("jpeg") ||
-        contentType.includes("jpg")
-      ) {
-        fallbackExtension = "jpg";
+        return;
       }
 
-      const defaultFilename =
-        `${activeTool.category.toLowerCase()}-${
-          selectedQuality || "media"
-        }.${fallbackExtension}`;
+      const cleanUrl =
+        inputValue.trim();
 
-      const filename =
-        getFilenameFromHeaders(
-          response.headers,
-          defaultFilename
+      if (!cleanUrl) {
+        setError(
+          "Original URL is missing."
         );
+        return;
+      }
 
-      const downloadUrl =
-        window.URL.createObjectURL(
-          blob
-        );
+      setError("");
+      setDownloadResult(null);
+      setIsDownloading(true);
+      setProgress(5);
 
       setProgressStage(
-        "Download completed."
+        "Preparing download..."
       );
 
-      completeProgress();
+      /*
+       * Find selected format
+       */
 
-      setDownloadResult({
-        success: true,
+      const selectedFormat =
+        Array.isArray(
+          videoInfo.formats
+        )
+          ? videoInfo.formats.find(
+              (format) =>
+                Number(
+                  format?.height
+                ) ===
+                Number(
+                  selectedQuality
+                )
+            )
+          : null;
 
-        downloadUrl,
+      const payload = {
+        tool:
+          activeTool.slug,
 
-        filename,
+        platform:
+          activeTool.category.toLowerCase(),
+
+        url:
+          cleanUrl,
 
         quality:
-          selectedQuality,
+          selectedQuality ||
+          720,
 
-        size: blob.size,
+        format:
+          selectedQuality
+            ? `${selectedQuality}p`
+            : "720p",
 
-        isPhoto,
-      });
-    } catch (err) {
-      clearProgressTimer();
+        formatId:
+          selectedFormat?.formatId ||
+          String(
+            selectedQuality ||
+              "720"
+          ),
 
-      const message =
-        await getAxiosErrorMessage(err);
+        title:
+          videoInfo.title ||
+          `${activeTool.category}-media`,
 
-      setError(
-        message ||
-          "Unable to download file."
-      );
+        isPhoto:
+          Boolean(
+            videoInfo.isPhoto
+          ),
 
-      setProgress(0);
+        directUrl:
+          videoInfo.isPhoto
+            ? videoInfo.url ||
+              videoInfo.thumbnail ||
+              null
+            : selectedFormat?.directUrl ||
+              null,
 
-      setProgressStage("");
-    } finally {
-      clearProgressTimer();
+        /*
+         * Important for backend
+         */
 
-      setIsDownloading(false);
-    }
-  };
+        formats:
+          Array.isArray(
+            videoInfo.formats
+          )
+            ? videoInfo.formats
+            : [],
+      };
+
+      try {
+        setProgressStage(
+          "Connecting to download server..."
+        );
+
+        const response =
+          await axios.post(
+            `${API_BASE_URL}/tools/download`,
+            payload,
+            {
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              responseType: "blob",
+
+              timeout: 180000,
+
+              onDownloadProgress:
+                (
+                  progressEvent
+                ) => {
+                  if (
+                    progressEvent.total
+                  ) {
+                    const percent =
+                      Math.round(
+                        (progressEvent.loaded *
+                          100) /
+                          progressEvent.total
+                      );
+
+                    const safePercent =
+                      Math.min(
+                        percent,
+                        99
+                      );
+
+                    setProgress(
+                      safePercent
+                    );
+
+                    setProgressStage(
+                      `Downloading file... ${safePercent}%`
+                    );
+                  } else {
+                    /*
+                     * Server may not send
+                     * Content-Length.
+                     */
+
+                    setProgress(
+                      (current) =>
+                        current <
+                        90
+                          ? Math.min(
+                              current +
+                                1,
+                              90
+                            )
+                          : current
+                    );
+
+                    setProgressStage(
+                      "Downloading file..."
+                    );
+                  }
+                },
+            }
+          );
+
+        const contentType =
+          response.headers[
+            "content-type"
+          ] || "";
+
+        /*
+         * JSON ERROR / LINK RESPONSE
+         */
+
+        if (
+          contentType.includes(
+            "application/json"
+          )
+        ) {
+          const text =
+            await response.data.text();
+
+          let json = {};
+
+          try {
+            json =
+              JSON.parse(text);
+          } catch {
+            // Ignore
+          }
+
+          if (
+            json.downloadUrl
+          ) {
+            finishProgress();
+
+            setProgressStage(
+              "Download ready."
+            );
+
+            setDownloadResult({
+              success: true,
+
+              downloadUrl:
+                json.downloadUrl,
+
+              filename:
+                json.filename ||
+                `${activeTool.category.toLowerCase()}-video.mp4`,
+
+              quality:
+                selectedQuality ||
+                720,
+
+              size:
+                json.size || 0,
+
+              isPhoto:
+                Boolean(
+                  videoInfo.isPhoto
+                ),
+            });
+
+            return;
+          }
+
+          throw new Error(
+            json?.message ||
+              "Download failed. Please try again."
+          );
+        }
+
+        /*
+         * BLOB
+         */
+
+        const blob =
+          response.data instanceof
+          Blob
+            ? response.data
+            : new Blob(
+                [response.data],
+                {
+                  type:
+                    contentType ||
+                    "application/octet-stream",
+                }
+              );
+
+        if (
+          !blob ||
+          blob.size <= 0
+        ) {
+          throw new Error(
+            "Downloaded file is empty."
+          );
+        }
+
+        const isPhoto =
+          videoInfo?.isPhoto ===
+            true ||
+          contentType.includes(
+            "image/"
+          );
+
+        let extension =
+          isPhoto
+            ? "jpg"
+            : "mp4";
+
+        if (
+          contentType.includes(
+            "png"
+          )
+        ) {
+          extension =
+            "png";
+        } else if (
+          contentType.includes(
+            "webp"
+          )
+        ) {
+          extension =
+            "webp";
+        } else if (
+          contentType.includes(
+            "jpeg"
+          ) ||
+          contentType.includes(
+            "jpg"
+          )
+        ) {
+          extension =
+            "jpg";
+        }
+
+        const defaultFilename =
+          `${activeTool.category.toLowerCase()}-${
+            selectedQuality ||
+            "media"
+          }.${extension}`;
+
+        const filename =
+          getFilenameFromHeaders(
+            response.headers,
+            defaultFilename
+          );
+
+        const downloadUrl =
+          window.URL.createObjectURL(
+            blob
+          );
+
+        finishProgress();
+
+        setProgressStage(
+          "Download completed."
+        );
+
+        setDownloadResult({
+          success: true,
+
+          downloadUrl,
+
+          filename,
+
+          quality:
+            selectedQuality,
+
+          size:
+            blob.size,
+
+          isPhoto,
+        });
+      } catch (err) {
+        clearProgressTimer();
+
+        const message =
+          await getAxiosErrorMessage(
+            err
+          );
+
+        setError(
+          message ||
+            "Unable to download file."
+        );
+
+        setProgress(0);
+        setProgressStage("");
+      } finally {
+        clearProgressTimer();
+
+        setIsDownloading(false);
+      }
+    };
 
   /* =========================================================
      PROCESS ANOTHER
   ========================================================= */
 
-  const processAnother = () => {
-    clearProgressTimer();
+  const processAnother =
+    () => {
+      clearProgressTimer();
 
-    if (downloadResult?.downloadUrl) {
-      try {
-        window.URL.revokeObjectURL(
-          downloadResult.downloadUrl
-        );
-      } catch {
-        // Ignore
+      if (
+        downloadResult?.downloadUrl
+      ) {
+        try {
+          window.URL.revokeObjectURL(
+            downloadResult.downloadUrl
+          );
+        } catch {
+          // Ignore
+        }
       }
-    }
 
-    setInputValue("");
-
-    setVideoInfo(null);
-
-    setSelectedQuality(null);
-
-    setDownloadResult(null);
-
-    setError("");
-
-    setProgress(0);
-
-    setProgressStage("");
-
-    setIsExtracting(false);
-
-    setIsDownloading(false);
-  };
+      setInputValue("");
+      setVideoInfo(null);
+      setSelectedQuality(null);
+      setDownloadResult(null);
+      setError("");
+      setProgress(0);
+      setProgressStage("");
+      setIsExtracting(false);
+      setIsDownloading(false);
+    };
 
   /* =========================================================
-     CHECK QUALITY
+     QUALITY CHECK
   ========================================================= */
 
-  const hasQuality = (quality) => {
-    if (
-      !videoInfo ||
-      videoInfo.isPhoto
-    ) {
-      return false;
-    }
+  const hasQuality =
+    (quality) => {
+      if (
+        !videoInfo ||
+        videoInfo.isPhoto
+      ) {
+        return false;
+      }
 
-    if (
-      !Array.isArray(
-        videoInfo.formats
-      ) ||
-      videoInfo.formats.length === 0
-    ) {
-      return true;
-    }
+      if (
+        !Array.isArray(
+          videoInfo.formats
+        ) ||
+        videoInfo.formats.length ===
+          0
+      ) {
+        return false;
+      }
 
-    return videoInfo.formats.some(
-      (item) =>
-        Number(item?.height) ===
-        Number(quality)
-    );
-  };
+      return videoInfo.formats.some(
+        (item) =>
+          Number(
+            item?.height
+          ) ===
+          Number(quality)
+      );
+    };
 
   /* =========================================================
-     PROGRESS BAR COMPONENT
+     PROGRESS BAR
   ========================================================= */
 
   const ProgressBar = ({
     label,
     value,
   }) => {
+    const safeValue =
+      Math.min(
+        Math.max(
+          Number(value) || 0,
+          0
+        ),
+        100
+      );
+
     return (
       <div className="mt-6">
         <div className="flex items-center justify-between mb-2">
@@ -998,7 +1268,10 @@ function Tools() {
           </span>
 
           <span className="text-xs font-bold text-indigo-400 tabular-nums">
-            {Math.round(value)}%
+            {Math.round(
+              safeValue
+            )}
+            %
           </span>
         </div>
 
@@ -1006,10 +1279,7 @@ function Tools() {
           <div
             className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-[width] duration-300 ease-out"
             style={{
-              width: `${Math.min(
-                Math.max(value, 0),
-                100
-              )}%`,
+              width: `${safeValue}%`,
             }}
           >
             <div className="absolute inset-0 animate-pulse bg-white/10" />
@@ -1017,7 +1287,7 @@ function Tools() {
         </div>
 
         <p className="mt-2 text-[11px] text-slate-500">
-          {Math.round(value) >= 100
+          {safeValue >= 100
             ? "Completed successfully"
             : "Please wait while we process your request..."}
         </p>
@@ -1027,9 +1297,6 @@ function Tools() {
 
   return (
     <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
-      {/* =====================================================
-          BACKGROUND
-      ===================================================== */}
 
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
 
@@ -1038,13 +1305,13 @@ function Tools() {
       ===================================================== */}
 
       <section className="relative pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">
           Download Videos & Media
           <br className="hidden sm:block" />
 
           <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
-            {" "}
-            Without Limits.
+            {" "}Without Limits.
           </span>
         </h1>
 
@@ -1058,9 +1325,11 @@ function Tools() {
 
         <div className="mt-10 max-w-xl mx-auto">
           <div className="relative group">
+
             <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition pointer-events-none" />
 
             <div className="relative flex items-center bg-[#131b2e] border border-slate-800 rounded-2xl shadow-xl overflow-hidden px-4 py-2">
+
               <span className="text-lg mr-3 text-slate-400">
                 🔍
               </span>
@@ -1069,87 +1338,112 @@ function Tools() {
                 type="text"
                 value={search}
                 onChange={(e) =>
-                  setSearch(e.target.value)
+                  setSearch(
+                    e.target.value
+                  )
                 }
                 placeholder="Search platforms or tools..."
                 className="w-full bg-transparent py-3 text-sm text-white placeholder-slate-500 outline-none"
               />
+
             </div>
           </div>
         </div>
       </section>
 
       {/* =====================================================
-          TOOLS GRID
+          TOOLS
       ===================================================== */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+
         <div className="flex items-center justify-center gap-2 overflow-x-auto pb-4 mb-10">
-          {categories.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() =>
-                setCategory(item)
-              }
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-                category === item
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                  : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
+
+          {categories.map(
+            (item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() =>
+                  setCategory(
+                    item
+                  )
+                }
+                className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+                  category === item
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
+                    : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                {item}
+              </button>
+            )
+          )}
+
         </div>
 
-        {filteredTools.length > 0 ? (
+        {filteredTools.length >
+        0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTools.map((tool) => (
-              <div
-                key={tool.id}
-                className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
-                    >
-                      {tool.icon}
+
+            {filteredTools.map(
+              (tool) => (
+                <div
+                  key={tool.id}
+                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
+                >
+
+                  <div>
+
+                    <div className="flex items-center justify-between mb-6">
+
+                      <div
+                        className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
+                      >
+                        {tool.icon}
+                      </div>
+
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
+                      >
+                        {tool.category}
+                      </span>
+
                     </div>
 
-                    <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
-                    >
-                      {tool.category}
-                    </span>
+                    <h3 className="text-xl font-bold text-white">
+                      {tool.name}
+                    </h3>
+
+                    <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
+                      {tool.description}
+                    </p>
+
                   </div>
 
-                  <h3 className="text-xl font-bold text-white">
-                    {tool.name}
-                  </h3>
+                  <div className="mt-8 pt-5 border-t border-slate-800">
 
-                  <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
-                    {tool.description}
-                  </p>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openTool(
+                          tool
+                        )
+                      }
+                      className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
+                    >
+                      Launch Utility →
+                    </button>
 
-                <div className="mt-8 pt-5 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openTool(tool)
-                    }
-                    className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
-                  >
-                    Launch Utility →
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
+
           </div>
         ) : (
           <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-16 text-center">
+
             <h3 className="text-xl font-bold text-white">
               No tools found
             </h3>
@@ -1158,14 +1452,18 @@ function Tools() {
               type="button"
               onClick={() => {
                 setSearch("");
-                setCategory("All");
+                setCategory(
+                  "All"
+                );
               }}
               className="mt-6 px-6 py-3 rounded-xl bg-slate-800 hover:bg-indigo-600 font-semibold text-sm"
             >
               Reset Filters
             </button>
+
           </div>
         )}
+
       </main>
 
       {/* =====================================================
@@ -1177,7 +1475,8 @@ function Tools() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto"
           onMouseDown={(e) => {
             if (
-              e.target === e.currentTarget &&
+              e.target ===
+                e.currentTarget &&
               !isExtracting &&
               !isDownloading
             ) {
@@ -1185,8 +1484,8 @@ function Tools() {
             }
           }}
         >
+
           <div className="relative w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl my-8">
-            {/* TOP LINE */}
 
             <div
               className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${activeTool.gradient}`}
@@ -1195,7 +1494,9 @@ function Tools() {
             {/* HEADER */}
 
             <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+
               <div className="flex items-center gap-3.5">
+
                 <div
                   className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${activeTool.gradient} flex items-center justify-center text-xl font-black text-white`}
                 >
@@ -1203,6 +1504,7 @@ function Tools() {
                 </div>
 
                 <div>
+
                   <h3 className="font-bold text-white">
                     {activeTool.name}
                   </h3>
@@ -1210,25 +1512,31 @@ function Tools() {
                   <span className="text-xs text-slate-400">
                     {activeTool.category} Engine
                   </span>
+
                 </div>
+
               </div>
 
               {!isExtracting &&
                 !isDownloading && (
                   <button
                     type="button"
-                    onClick={closeModal}
+                    onClick={
+                      closeModal
+                    }
                     className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
                   >
                     ✕
                   </button>
                 )}
+
             </div>
 
             {/* ERROR */}
 
             {error && (
               <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
+
                 <strong className="block mb-1">
                   Processing Failed
                 </strong>
@@ -1236,15 +1544,17 @@ function Tools() {
                 <span className="text-xs break-words">
                   {error}
                 </span>
+
               </div>
             )}
 
             {/* =================================================
-                DOWNLOAD SUCCESS
+                SUCCESS
             ================================================= */}
 
             {downloadResult?.success ? (
               <div className="py-8 text-center">
+
                 <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl text-emerald-400 mb-5">
                   ✓
                 </div>
@@ -1285,20 +1595,25 @@ function Tools() {
 
                 <button
                   type="button"
-                  onClick={processAnother}
+                  onClick={
+                    processAnother
+                  }
                   className="mt-3 w-full rounded-2xl border border-slate-700 bg-slate-800/50 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
                 >
                   Process Another Link
                 </button>
+
               </div>
             ) : videoInfo ? (
-              /* =================================================
-                 MEDIA INFORMATION
-              ================================================= */
 
               <div className="mt-6">
+
+                {/* MEDIA INFO */}
+
                 <div className="rounded-2xl border border-slate-800 bg-[#0c1322] p-4">
+
                   <div className="flex gap-4">
+
                     {videoInfo.thumbnail && (
                       <img
                         src={
@@ -1314,6 +1629,7 @@ function Tools() {
                     )}
 
                     <div className="min-w-0">
+
                       <h4 className="font-bold text-white line-clamp-2">
                         {videoInfo.title ||
                           "Media"}
@@ -1336,36 +1652,42 @@ function Tools() {
                           }
                         </p>
                       )}
+
                     </div>
+
                   </div>
                 </div>
 
                 {/* =================================================
-                   PHOTO
+                    PHOTO
                 ================================================= */}
 
                 {videoInfo.isPhoto ? (
                   <div className="mt-6">
+
                     <div className="rounded-2xl border border-slate-800 bg-slate-800/30 p-5 text-center">
+
                       <p className="text-sm text-slate-400">
                         High resolution photo
                         is ready to download.
                       </p>
+
                     </div>
 
                     {isDownloading && (
                       <ProgressBar
                         label={
-                          progress >= 99
-                            ? "Finishing download..."
-                            : progressStage ||
-                              "Downloading..."
+                          progressStage ||
+                          "Downloading..."
                         }
-                        value={progress}
+                        value={
+                          progress
+                        }
                       />
                     )}
 
                     <div className="mt-7 flex gap-3">
+
                       <button
                         type="button"
                         disabled={
@@ -1395,21 +1717,26 @@ function Tools() {
                             )}% Downloading...`
                           : "Download Photo"}
                       </button>
+
                     </div>
                   </div>
                 ) : (
+
                   /* =================================================
                      VIDEO QUALITY
                   ================================================= */
 
                   <div className="mt-6">
+
                     <h4 className="font-bold text-white mb-3">
                       Select Video Quality
                     </h4>
 
                     <div className="grid grid-cols-2 gap-3">
+
                       {QUALITY_OPTIONS.map(
                         (quality) => {
+
                           const available =
                             hasQuality(
                               quality.value
@@ -1446,7 +1773,9 @@ function Tools() {
                                   : "border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed"
                               }`}
                             >
+
                               <div className="flex items-center justify-between">
+
                                 <span className="font-bold text-white">
                                   {
                                     quality.label
@@ -1458,6 +1787,7 @@ function Tools() {
                                     ✓
                                   </span>
                                 )}
+
                               </div>
 
                               {!available && (
@@ -1465,37 +1795,37 @@ function Tools() {
                                   Not available
                                 </span>
                               )}
+
                             </button>
                           );
                         }
                       )}
+
                     </div>
+
                   </div>
                 )}
 
-                {/* =================================================
-                   VIDEO DOWNLOAD PROGRESS
-                ================================================= */}
+                {/* DOWNLOAD PROGRESS */}
 
                 {isDownloading &&
                   !videoInfo.isPhoto && (
                     <ProgressBar
                       label={
-                        progress >= 99
-                          ? "Finishing download..."
-                          : progressStage ||
-                            "Downloading..."
+                        progressStage ||
+                        "Downloading..."
                       }
-                      value={progress}
+                      value={
+                        progress
+                      }
                     />
                   )}
 
-                {/* =================================================
-                   VIDEO BUTTONS
-                ================================================= */}
+                {/* BUTTONS */}
 
                 {!videoInfo.isPhoto && (
                   <div className="mt-7 flex gap-3">
+
                     <button
                       type="button"
                       disabled={
@@ -1526,35 +1856,50 @@ function Tools() {
                           )}% Downloading...`
                         : "Download Now"}
                     </button>
+
                   </div>
                 )}
+
               </div>
             ) : (
+
               /* =================================================
                  URL FORM
               ================================================= */
 
               <form
-                onSubmit={extractVideo}
+                onSubmit={
+                  extractVideo
+                }
                 className="mt-6 space-y-5"
               >
+
                 <p className="text-sm leading-relaxed text-slate-400">
                   Paste the public{" "}
-                  {activeTool.category} link
-                  below to extract available
+                  {
+                    activeTool.category
+                  }{" "}
+                  link below to
+                  extract available
                   download options.
                 </p>
 
                 <div>
+
                   <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
                     Target{" "}
-                    {activeTool.category} URL
+                    {
+                      activeTool.category
+                    }{" "}
+                    URL
                   </label>
 
                   <input
                     type="url"
                     required
-                    value={inputValue}
+                    value={
+                      inputValue
+                    }
                     onChange={(e) =>
                       setInputValue(
                         e.target.value
@@ -1577,11 +1922,10 @@ function Tools() {
                     }
                     className="w-full rounded-2xl border border-slate-800 bg-[#0c1322] px-4 py-3.5 text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
                   />
+
                 </div>
 
-                {/* =================================================
-                   EXTRACTION PROGRESS
-                ================================================= */}
+                {/* EXTRACTION PROGRESS */}
 
                 {isExtracting && (
                   <ProgressBar
@@ -1589,11 +1933,14 @@ function Tools() {
                       progressStage ||
                       "Extracting media..."
                     }
-                    value={progress}
+                    value={
+                      progress
+                    }
                   />
                 )}
 
                 <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+
                   <button
                     type="button"
                     disabled={
@@ -1621,9 +1968,12 @@ function Tools() {
                         )}% Extracting...`
                       : "Extract Media"}
                   </button>
+
                 </div>
+
               </form>
             )}
+
           </div>
         </div>
       )}
