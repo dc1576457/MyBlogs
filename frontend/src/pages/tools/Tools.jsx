@@ -599,11 +599,11 @@ export default function Tools() {
       </div>
 
       {/* Hero Header */}
-      <header className="relative z-10 mx-auto max-w-7xl px-4 pt-16 pb-10 sm:px-6 lg:pt-20 text-center">
+      <header className="relative z-10 mx-auto max-w-6xl px-4 pt-14 pb-10 sm:px-4 lg:pt-15 text-center">
        
-        <h1 className="text-2xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl leading-[1.1]">
+        <h1 className="text-2xl font-black tracking-tight text-white sm:text-4xl lg:text-4xl leading-[1.1]">
           Media Extractor &{" "}
-          <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-rose-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-orange-300 via-amber-200 to-rose-300 bg-clip-text text-transparent">
             Downloader Hub.
           </span>
         </h1>
