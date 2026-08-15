@@ -4,7 +4,7 @@ import { extractTool, downloadTool } from "../controllers/toolController.js";
 const router = express.Router();
 
 /* =========================================================
-   TOOL API HEALTH
+   HEALTH CHECK
 ========================================================= */
 
 router.get("/", (req, res) => {
@@ -19,10 +19,25 @@ router.get("/", (req, res) => {
 });
 
 /* =========================================================
-   ACTIONS
+   ROBUST ROUTE HANDLERS
 ========================================================= */
 
 router.post("/extract", extractTool);
+router.post("/extract/", extractTool);
+router.get("/extract", (req, res) => {
+  res.status(400).json({
+    success: false,
+    message: "Send a POST request with JSON body { url } to extract media.",
+  });
+});
+
 router.post("/download", downloadTool);
+router.post("/download/", downloadTool);
+router.get("/download", (req, res) => {
+  res.status(400).json({
+    success: false,
+    message: "Send a POST request with JSON body to download media.",
+  });
+});
 
 export default router;
