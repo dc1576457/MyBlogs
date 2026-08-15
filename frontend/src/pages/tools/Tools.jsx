@@ -8,7 +8,11 @@ import axios from "axios";
 const RAW_API_URL =
   import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
 
-const API_BASE_URL = RAW_API_URL.replace(/\/+$/, "");
+// Ensure HTTPS and no trailing slash
+const API_BASE_URL = RAW_API_URL.replace(/^http:\/\//i, "https://").replace(
+  /\/+$/,
+  ""
+);
 
 /* =========================================================
    TOOLS DATA
@@ -20,7 +24,7 @@ const toolsData = [
     name: "YouTube Video Downloader",
     slug: "youtube-video-downloader",
     description:
-      "Extract available video qualities and download public YouTube videos.",
+      "Extract available video qualities and download public YouTube videos fast.",
     category: "YouTube",
     icon: "▶",
     gradient: "from-red-500 via-rose-500 to-pink-600",
@@ -158,6 +162,10 @@ const getFilenameFromHeaders = (headers, fallback) => {
 };
 
 const getAxiosErrorMessage = async (error) => {
+  if (error?.response?.status === 405) {
+    return "Endpoint configuration issue (405 Method Not Allowed). Please ensure backend is using HTTPS and POST.";
+  }
+
   if (
     error?.response?.data &&
     typeof error.response.data === "object" &&
@@ -187,10 +195,10 @@ const getAxiosErrorMessage = async (error) => {
   }
 
   if (error?.code === "ECONNABORTED") {
-    return "Request timed out. Please try again.";
+    return "The server took too long to process. Please retry.";
   }
   if (error?.message?.toLowerCase().includes("network error")) {
-    return "Network error. Please check your connection and server status.";
+    return "Network error. Please check your internet connection and backend status.";
   }
   return error?.message || "Something went wrong.";
 };
@@ -286,21 +294,20 @@ function Tools() {
     setIsExtracting(true);
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/tools/extract`,
-        {
+      const response = await axios({
+        method: "POST",
+        url: `${API_BASE_URL}/tools/extract`,
+        data: {
           tool: activeTool.slug,
           platform: activeTool.category.toLowerCase(),
           url: cleanUrl,
         },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          timeout: 120000,
-        }
-      );
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 120000,
+      });
 
       setProgress(85);
 
@@ -385,32 +392,33 @@ function Tools() {
       formatId: selectedFormat?.formatId || null,
       title: videoInfo.title || `${activeTool.category}-media`,
       isPhoto: Boolean(videoInfo.isPhoto),
-      directUrl: videoInfo.isPhoto ? (videoInfo.thumbnail || videoInfo.url) : null,
+      directUrl: videoInfo.isPhoto
+        ? videoInfo.thumbnail || videoInfo.url
+        : selectedFormat?.directUrl || null,
     };
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/tools/download`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "video/*,image/*,application/octet-stream,application/json",
-          },
-          responseType: "blob",
-          timeout: 15 * 60 * 1000,
-          onDownloadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percent = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setProgress(Math.min(percent, 99));
-            } else {
-              setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-            }
-          },
-        }
-      );
+      const response = await axios({
+        method: "POST",
+        url: `${API_BASE_URL}/tools/download`,
+        data: payload,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "video/*,image/*,application/octet-stream,application/json",
+        },
+        responseType: "blob",
+        timeout: 15 * 60 * 1000,
+        onDownloadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            setProgress(Math.min(percent, 99));
+          } else {
+            setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+          }
+        },
+      });
 
       const contentType = response.headers["content-type"] || "";
 
@@ -504,7 +512,6 @@ function Tools() {
 
   return (
     <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
-      {/* BACKGROUND BLUR */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
 
       {/* HERO SECTION */}
