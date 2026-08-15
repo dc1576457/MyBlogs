@@ -63,25 +63,18 @@ const toolsData = [
   },
 ];
 
-const categories = [
-  "All",
-  "YouTube",
-  "Facebook",
-  "Instagram",
-  "Pinterest",
-];
+const categories = ["All", "YouTube", "Facebook", "Instagram", "Pinterest"];
 
-/* =========================================================
-   ONLY 360P + 720P
-========================================================= */
-
+/*
+  ONLY TWO VIDEO QUALITIES
+*/
 const QUALITY_OPTIONS = [
   { value: 360, label: "360p" },
   { value: 720, label: "720p HD" },
 ];
 
 /* =========================================================
-   PLATFORM URL VALIDATION
+   URL VALIDATION
 ========================================================= */
 
 const validatePlatformUrl = (value, slug) => {
@@ -164,26 +157,24 @@ const formatBytes = (bytes) => {
 };
 
 /* =========================================================
-   FILENAME FROM HEADERS
+   FILENAME
 ========================================================= */
 
 const getFilenameFromHeaders = (headers, fallback) => {
   try {
     const disposition = headers?.["content-disposition"];
 
-    if (!disposition) return fallback;
+    if (!disposition) {
+      return fallback;
+    }
 
-    const utfMatch = disposition.match(
-      /filename\*=UTF-8''([^;]+)/i
-    );
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
 
     if (utfMatch?.[1]) {
       return decodeURIComponent(utfMatch[1]);
     }
 
-    const normalMatch = disposition.match(
-      /filename="?([^"]+)"?/i
-    );
+    const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
 
     if (normalMatch?.[1]) {
       return decodeURIComponent(normalMatch[1]);
@@ -196,7 +187,7 @@ const getFilenameFromHeaders = (headers, fallback) => {
 };
 
 /* =========================================================
-   AXIOS ERROR MESSAGE
+   AXIOS ERROR
 ========================================================= */
 
 const getAxiosErrorMessage = async (error) => {
@@ -222,7 +213,7 @@ const getAxiosErrorMessage = async (error) => {
           return (
             json?.message ||
             json?.error ||
-            text
+            "Download failed."
           );
         } catch {
           return text;
@@ -235,6 +226,10 @@ const getAxiosErrorMessage = async (error) => {
 
   if (error?.code === "ECONNABORTED") {
     return "Server request timed out. Please try again.";
+  }
+
+  if (error?.code === "ERR_NETWORK") {
+    return "Network error. Please check your connection and try again.";
   }
 
   return error?.message || "Something went wrong.";
@@ -261,11 +256,9 @@ function Tools() {
 
   const [videoInfo, setVideoInfo] = useState(null);
 
-  const [selectedQuality, setSelectedQuality] =
-    useState(null);
+  const [selectedQuality, setSelectedQuality] = useState(null);
 
-  const [downloadResult, setDownloadResult] =
-    useState(null);
+  const [downloadResult, setDownloadResult] = useState(null);
 
   /* =========================================================
      FILTER TOOLS
@@ -282,8 +275,7 @@ function Tools() {
         tool.category.toLowerCase().includes(text);
 
       const matchesCategory =
-        category === "All" ||
-        tool.category === category;
+        category === "All" || tool.category === category;
 
       return matchesSearch && matchesCategory;
     });
@@ -314,9 +306,11 @@ function Tools() {
 
     if (downloadResult?.downloadUrl) {
       try {
-        window.URL.revokeObjectURL(
-          downloadResult.downloadUrl
-        );
+        if (downloadResult.downloadUrl.startsWith("blob:")) {
+          window.URL.revokeObjectURL(
+            downloadResult.downloadUrl
+          );
+        }
       } catch {
         // Ignore
       }
@@ -356,16 +350,10 @@ function Tools() {
       return;
     }
 
-    if (
-      !validatePlatformUrl(
-        cleanUrl,
-        activeTool.slug
-      )
-    ) {
+    if (!validatePlatformUrl(cleanUrl, activeTool.slug)) {
       setError(
         `Please enter a valid ${activeTool.category} URL.`
       );
-
       setProgress(0);
       return;
     }
@@ -377,14 +365,12 @@ function Tools() {
         `${API_BASE_URL}/tools/extract`,
         {
           tool: activeTool.slug,
-          platform:
-            activeTool.category.toLowerCase(),
+          platform: activeTool.category.toLowerCase(),
           url: cleanUrl,
         },
         {
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           timeout: 120000,
         }
@@ -400,8 +386,7 @@ function Tools() {
       }
 
       const data =
-        response.data.data ||
-        response.data;
+        response.data.data || response.data;
 
       if (!data) {
         throw new Error(
@@ -422,53 +407,56 @@ function Tools() {
       }
 
       /* =====================================================
-         VIDEO QUALITY
-         ONLY 360 / 720
+         VIDEO QUALITIES
       ===================================================== */
 
-      const availableFormats =
-        Array.isArray(data.formats)
-          ? data.formats
-          : [];
+      const availableFormats = Array.isArray(
+        data.formats
+      )
+        ? data.formats
+        : [];
 
-      const availableHeights =
-        availableFormats
-          .map((item) =>
-            Number(item?.height)
-          )
-          .filter(
-            (height) =>
-              Number.isFinite(height) &&
-              height > 0
-          );
+      const availableHeights = availableFormats
+        .map((item) => Number(item?.height))
+        .filter(
+          (height) =>
+            Number.isFinite(height) && height > 0
+        );
 
       const uniqueHeights = [
         ...new Set(availableHeights),
       ];
 
-      if (
-        uniqueHeights.includes(720)
-      ) {
-        setSelectedQuality(720);
-      } else if (
-        uniqueHeights.includes(360)
-      ) {
-        setSelectedQuality(360);
-      } else if (
-        uniqueHeights.length > 0
-      ) {
-        const closest = uniqueHeights
-          .filter(
-            (height) =>
-              height <= 720
-          )
-          .sort((a, b) => b - a)[0];
+      /*
+        Prefer 720 first, then 360.
+      */
 
-        setSelectedQuality(
-          closest || 360
+      const preferredQuality =
+        [720, 360].find((quality) =>
+          uniqueHeights.includes(quality)
         );
+
+      if (preferredQuality) {
+        setSelectedQuality(preferredQuality);
+      } else if (uniqueHeights.length > 0) {
+        /*
+          If backend gives another resolution,
+          choose the closest supported one.
+        */
+
+        const closest =
+          uniqueHeights.includes(720)
+            ? 720
+            : uniqueHeights.includes(360)
+            ? 360
+            : Math.max(...uniqueHeights);
+
+        setSelectedQuality(closest);
       } else {
-        setSelectedQuality(360);
+        /*
+          Default
+        */
+        setSelectedQuality(720);
       }
 
       setProgress(100);
@@ -477,8 +465,7 @@ function Tools() {
         await getAxiosErrorMessage(err);
 
       setError(
-        message ||
-          "Unable to extract media."
+        message || "Unable to extract media."
       );
 
       setProgress(0);
@@ -503,31 +490,58 @@ function Tools() {
       return;
     }
 
-    const cleanUrl =
-      inputValue.trim();
+    const cleanUrl = inputValue.trim();
 
     if (!cleanUrl) {
-      setError(
-        "Original URL is missing."
-      );
+      setError("Original URL is missing.");
       return;
     }
 
     setError("");
     setDownloadResult(null);
     setIsDownloading(true);
-    setProgress(15);
+    setProgress(10);
+
+    /*
+      Find selected format
+    */
 
     const selectedFormat =
-      Array.isArray(
-        videoInfo.formats
-      )
+      Array.isArray(videoInfo.formats)
         ? videoInfo.formats.find(
             (format) =>
               Number(format?.height) ===
               Number(selectedQuality)
           )
         : null;
+
+    /*
+      Only 360 / 720 allowed for video
+    */
+
+    let finalQuality = selectedQuality;
+
+    if (!videoInfo.isPhoto) {
+      if (
+        Number(finalQuality) !== 360 &&
+        Number(finalQuality) !== 720
+      ) {
+        finalQuality = 720;
+      }
+    }
+
+    /*
+      Direct URL:
+      - Instagram
+      - Facebook
+      - Pinterest
+      - Photo
+    */
+
+    const directMediaUrl =
+      videoInfo.isPhoto
+        ? videoInfo.thumbnail || videoInfo.url
+        : selectedFormat?.directUrl || null;
 
     const payload = {
       tool: activeTool.slug,
@@ -538,17 +552,18 @@ function Tools() {
       url: cleanUrl,
 
       quality:
-        selectedQuality || 360,
+        videoInfo.isPhoto
+          ? null
+          : finalQuality,
 
-      format: selectedQuality
-        ? `${selectedQuality}p`
-        : "360p",
+      format:
+        videoInfo.isPhoto
+          ? "jpg"
+          : `${finalQuality}p`,
 
       formatId:
         selectedFormat?.formatId ||
-        String(
-          selectedQuality || 360
-        ),
+        String(finalQuality || "720"),
 
       title:
         videoInfo.title ||
@@ -558,62 +573,45 @@ function Tools() {
         Boolean(videoInfo.isPhoto),
 
       directUrl:
-        videoInfo.isPhoto
-          ? videoInfo.thumbnail ||
-            videoInfo.url
-          : selectedFormat?.directUrl ||
-            null,
+        directMediaUrl || null,
     };
 
     try {
-      const response =
-        await axios.post(
-          `${API_BASE_URL}/tools/download`,
-          payload,
-          {
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+      const response = await axios.post(
+        `${API_BASE_URL}/tools/download`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-            responseType: "blob",
+          responseType: "blob",
 
-            timeout: 120000,
+          timeout: 180000,
 
-            onDownloadProgress:
-              (progressEvent) => {
-                if (
+          onDownloadProgress: (
+            progressEvent
+          ) => {
+            if (progressEvent.total) {
+              const percent = Math.round(
+                (progressEvent.loaded * 100) /
                   progressEvent.total
-                ) {
-                  const percent =
-                    Math.round(
-                      (progressEvent.loaded *
-                        100) /
-                        progressEvent.total
-                    );
+              );
 
-                  setProgress(
-                    Math.min(
-                      percent,
-                      99
-                    )
-                  );
-                } else {
-                  setProgress(
-                    (prev) =>
-                      prev < 90
-                        ? prev + 5
-                        : prev
-                  );
-                }
-              },
-          }
-        );
+              setProgress(
+                Math.min(percent, 99)
+              );
+            } else {
+              setProgress((prev) =>
+                prev < 90 ? prev + 4 : prev
+              );
+            }
+          },
+        }
+      );
 
       const contentType =
-        response.headers[
-          "content-type"
-        ] || "";
+        response.headers["content-type"] || "";
 
       /* =====================================================
          JSON RESPONSE
@@ -630,32 +628,37 @@ function Tools() {
         let json = {};
 
         try {
-          json =
-            JSON.parse(text);
+          json = JSON.parse(text);
         } catch {
-          // Ignore
+          throw new Error(
+            "Invalid download response from server."
+          );
         }
 
-        if (json.downloadUrl) {
+        if (
+          json?.success &&
+          json?.downloadUrl
+        ) {
           setProgress(100);
 
           setDownloadResult({
             success: true,
             downloadUrl:
               json.downloadUrl,
-
             filename:
               json.filename ||
-              `${activeTool.category.toLowerCase()}-video.mp4`,
-
+              `${activeTool.category.toLowerCase()}-${
+                finalQuality || "media"
+              }.mp4`,
             quality:
-              selectedQuality || 360,
-
+              finalQuality,
             size:
               json.size || 0,
-
             isPhoto:
-              false,
+              Boolean(
+                json.isPhoto ||
+                  videoInfo.isPhoto
+              ),
           });
 
           return;
@@ -663,12 +666,12 @@ function Tools() {
 
         throw new Error(
           json?.message ||
-            "Download failed. Please try another quality."
+            "Download failed. Please try again."
         );
       }
 
       /* =====================================================
-         DIRECT FILE BLOB
+         BLOB RESPONSE
       ===================================================== */
 
       const blob =
@@ -683,50 +686,47 @@ function Tools() {
               }
             );
 
-      if (
-        !blob ||
-        blob.size <= 0
-      ) {
+      if (!blob || blob.size <= 0) {
         throw new Error(
           "Downloaded file is empty."
         );
       }
 
+      /* =====================================================
+         DETERMINE MEDIA TYPE
+      ===================================================== */
+
       const isPhoto =
         videoInfo?.isPhoto === true ||
-        contentType.includes(
-          "image/"
-        );
+        contentType.includes("image/");
 
-      let fallbackExtension =
-        isPhoto
-          ? "jpg"
-          : "mp4";
+      let extension = isPhoto
+        ? "jpg"
+        : "mp4";
 
-      if (
-        contentType.includes(
-          "png"
-        )
-      ) {
-        fallbackExtension = "png";
+      if (contentType.includes("png")) {
+        extension = "png";
       } else if (
-        contentType.includes(
-          "webp"
-        )
+        contentType.includes("webp")
       ) {
-        fallbackExtension = "webp";
+        extension = "webp";
       } else if (
-        contentType.includes(
-          "webm"
-        )
+        contentType.includes("jpeg")
       ) {
-        fallbackExtension = "webm";
+        extension = "jpg";
+      } else if (
+        contentType.includes("mp4")
+      ) {
+        extension = "mp4";
       }
 
-      const defaultFilename =
-        `${activeTool.category.toLowerCase()}-${
-          selectedQuality || "media"
-        }.${fallbackExtension}`;
+      /* =====================================================
+         FILENAME
+      ===================================================== */
+
+      const defaultFilename = `${activeTool.category.toLowerCase()}-${
+        finalQuality || "media"
+      }.${extension}`;
 
       const filename =
         getFilenameFromHeaders(
@@ -734,10 +734,12 @@ function Tools() {
           defaultFilename
         );
 
+      /*
+        Create browser blob URL
+      */
+
       const downloadUrl =
-        window.URL.createObjectURL(
-          blob
-        );
+        window.URL.createObjectURL(blob);
 
       setProgress(100);
 
@@ -745,8 +747,9 @@ function Tools() {
         success: true,
         downloadUrl,
         filename,
-        quality:
-          selectedQuality,
+        quality: isPhoto
+          ? null
+          : finalQuality,
         size: blob.size,
         isPhoto,
       });
@@ -772,9 +775,15 @@ function Tools() {
   const processAnother = () => {
     if (downloadResult?.downloadUrl) {
       try {
-        window.URL.revokeObjectURL(
-          downloadResult.downloadUrl
-        );
+        if (
+          downloadResult.downloadUrl.startsWith(
+            "blob:"
+          )
+        ) {
+          window.URL.revokeObjectURL(
+            downloadResult.downloadUrl
+          );
+        }
       } catch {
         // Ignore
       }
@@ -791,7 +800,7 @@ function Tools() {
   };
 
   /* =========================================================
-     CHECK QUALITY
+     QUALITY CHECK
   ========================================================= */
 
   const hasQuality = (quality) => {
@@ -803,9 +812,7 @@ function Tools() {
     }
 
     if (
-      !Array.isArray(
-        videoInfo.formats
-      ) ||
+      !Array.isArray(videoInfo.formats) ||
       videoInfo.formats.length === 0
     ) {
       return true;
@@ -818,38 +825,48 @@ function Tools() {
     );
   };
 
+  /* =========================================================
+     JSX
+  ========================================================= */
+
   return (
     <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
+
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
 
       {/* =====================================================
-          HERO SECTION
+          HERO
       ===================================================== */}
 
       <section className="relative pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">
+
           Download Videos & Media
+
           <br className="hidden sm:block" />
 
           <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
             {" "}
             Without Limits.
           </span>
+
         </h1>
 
         <p className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-slate-400 leading-relaxed">
-          Extract public videos and photos from
-          YouTube, Facebook, Instagram, and
-          Pinterest instantly.
+          Extract public videos and photos from YouTube, Facebook, Instagram, and Pinterest instantly.
         </p>
 
-        {/* SEARCH BAR */}
+        {/* SEARCH */}
 
         <div className="mt-10 max-w-xl mx-auto">
+
           <div className="relative group">
+
             <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition pointer-events-none" />
 
             <div className="relative flex items-center bg-[#131b2e] border border-slate-800 rounded-2xl shadow-xl overflow-hidden px-4 py-2">
+
               <span className="text-lg mr-3 text-slate-400">
                 🔍
               </span>
@@ -858,94 +875,105 @@ function Tools() {
                 type="text"
                 value={search}
                 onChange={(e) =>
-                  setSearch(
-                    e.target.value
-                  )
+                  setSearch(e.target.value)
                 }
                 placeholder="Search platforms or tools..."
                 className="w-full bg-transparent py-3 text-sm text-white placeholder-slate-500 outline-none"
               />
+
             </div>
+
           </div>
+
         </div>
+
       </section>
 
       {/* =====================================================
-          TOOLS GRID
+          TOOLS
       ===================================================== */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+
         <div className="flex items-center justify-center gap-2 overflow-x-auto pb-4 mb-10">
-          {categories.map(
-            (item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() =>
-                  setCategory(item)
-                }
-                className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-                  category === item
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                    : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                {item}
-              </button>
-            )
-          )}
+
+          {categories.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() =>
+                setCategory(item)
+              }
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+                category === item
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
+                  : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+
         </div>
 
-        {filteredTools.length >
-        0 ? (
+        {filteredTools.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTools.map(
-              (tool) => (
-                <div
-                  key={tool.id}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-6">
-                      <div
-                        className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
-                      >
-                        {tool.icon}
-                      </div>
 
-                      <span
-                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
-                      >
-                        {tool.category}
-                      </span>
+            {filteredTools.map((tool) => (
+              <div
+                key={tool.id}
+                className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
+              >
+
+                <div>
+
+                  <div className="flex items-center justify-between mb-6">
+
+                    <div
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
+                    >
+                      {tool.icon}
                     </div>
 
-                    <h3 className="text-xl font-bold text-white">
-                      {tool.name}
-                    </h3>
-
-                    <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
-                      {tool.description}
-                    </p>
-                  </div>
-
-                  <div className="mt-8 pt-5 border-t border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openTool(tool)
-                      }
-                      className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
+                    <span
+                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
                     >
-                      Launch Utility →
-                    </button>
+                      {tool.category}
+                    </span>
+
                   </div>
+
+                  <h3 className="text-xl font-bold text-white">
+                    {tool.name}
+                  </h3>
+
+                  <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
+                    {tool.description}
+                  </p>
+
                 </div>
-              )
-            )}
+
+                <div className="mt-8 pt-5 border-t border-slate-800">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openTool(tool)
+                    }
+                    className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
+                  >
+                    Launch Utility →
+                  </button>
+
+                </div>
+
+              </div>
+            ))}
+
           </div>
         ) : (
           <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-16 text-center">
+
             <h3 className="text-xl font-bold text-white">
               No tools found
             </h3>
@@ -960,8 +988,10 @@ function Tools() {
             >
               Reset Filters
             </button>
+
           </div>
         )}
+
       </main>
 
       {/* =====================================================
@@ -973,8 +1003,7 @@ function Tools() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto"
           onMouseDown={(e) => {
             if (
-              e.target ===
-                e.currentTarget &&
+              e.target === e.currentTarget &&
               !isExtracting &&
               !isDownloading
             ) {
@@ -982,13 +1011,19 @@ function Tools() {
             }
           }}
         >
+
           <div className="relative w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl my-8">
+
             <div
               className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${activeTool.gradient}`}
             />
 
+            {/* HEADER */}
+
             <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+
               <div className="flex items-center gap-3.5">
+
                 <div
                   className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${activeTool.gradient} flex items-center justify-center text-xl font-black text-white`}
                 >
@@ -996,35 +1031,37 @@ function Tools() {
                 </div>
 
                 <div>
+
                   <h3 className="font-bold text-white">
                     {activeTool.name}
                   </h3>
 
                   <span className="text-xs text-slate-400">
-                    {activeTool.category}{" "}
-                    Engine
+                    {activeTool.category} Engine
                   </span>
+
                 </div>
+
               </div>
 
               {!isExtracting &&
                 !isDownloading && (
                   <button
                     type="button"
-                    onClick={
-                      closeModal
-                    }
+                    onClick={closeModal}
                     className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
                   >
                     ✕
                   </button>
                 )}
+
             </div>
 
             {/* ERROR */}
 
             {error && (
               <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
+
                 <strong className="block mb-1">
                   Processing Failed
                 </strong>
@@ -1032,6 +1069,7 @@ function Tools() {
                 <span className="text-xs break-words">
                   {error}
                 </span>
+
               </div>
             )}
 
@@ -1041,6 +1079,7 @@ function Tools() {
 
             {downloadResult?.success ? (
               <div className="py-8 text-center">
+
                 <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl text-emerald-400 mb-5">
                   ✓
                 </div>
@@ -1088,15 +1127,20 @@ function Tools() {
                 >
                   Process Another Link
                 </button>
+
               </div>
             ) : videoInfo ? (
+
+              /* =================================================
+                 VIDEO INFO
+              ================================================= */
+
               <div className="mt-6">
-                {/* =================================================
-                    VIDEO INFO
-                ================================================= */}
 
                 <div className="rounded-2xl border border-slate-800 bg-[#0c1322] p-4">
+
                   <div className="flex gap-4">
+
                     {videoInfo.thumbnail && (
                       <img
                         src={
@@ -1112,6 +1156,7 @@ function Tools() {
                     )}
 
                     <div className="min-w-0">
+
                       <h4 className="font-bold text-white line-clamp-2">
                         {videoInfo.title ||
                           "Media"}
@@ -1120,22 +1165,21 @@ function Tools() {
                       {videoInfo.uploader && (
                         <p className="mt-1 text-xs text-slate-500">
                           By:{" "}
-                          {
-                            videoInfo.uploader
-                          }
+                          {videoInfo.uploader}
                         </p>
                       )}
 
                       {videoInfo.platform && (
                         <p className="mt-1 text-xs text-slate-600 capitalize">
                           Platform:{" "}
-                          {
-                            videoInfo.platform
-                          }
+                          {videoInfo.platform}
                         </p>
                       )}
+
                     </div>
+
                   </div>
+
                 </div>
 
                 {/* =================================================
@@ -1143,17 +1187,22 @@ function Tools() {
                 ================================================= */}
 
                 {videoInfo.isPhoto ? (
+
                   <div className="mt-6">
+
                     <div className="rounded-2xl border border-slate-800 bg-slate-800/30 p-5 text-center">
+
                       <p className="text-sm text-slate-400">
-                        High resolution photo
-                        is ready to download.
+                        High resolution photo is ready to download.
                       </p>
+
                     </div>
 
                     {isDownloading && (
                       <div className="mt-6">
+
                         <div className="flex justify-between text-xs mb-2">
+
                           <span className="text-slate-400">
                             Downloading...
                           </span>
@@ -1161,20 +1210,25 @@ function Tools() {
                           <span className="text-indigo-400 font-bold">
                             {progress}%
                           </span>
+
                         </div>
 
                         <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
                             style={{
                               width: `${progress}%`,
                             }}
                           />
+
                         </div>
+
                       </div>
                     )}
 
                     <div className="mt-7 flex gap-3">
+
                       <button
                         type="button"
                         disabled={
@@ -1202,21 +1256,28 @@ function Tools() {
                           ? "Downloading..."
                           : "Download Photo"}
                       </button>
+
                     </div>
+
                   </div>
+
                 ) : (
+
                   /* =================================================
                      VIDEO QUALITY
                   ================================================= */
 
                   <div className="mt-6">
+
                     <h4 className="font-bold text-white mb-3">
                       Select Video Quality
                     </h4>
 
                     <div className="grid grid-cols-2 gap-3">
+
                       {QUALITY_OPTIONS.map(
                         (quality) => {
+
                           const available =
                             hasQuality(
                               quality.value
@@ -1253,7 +1314,9 @@ function Tools() {
                                   : "border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed"
                               }`}
                             >
+
                               <div className="flex items-center justify-between">
+
                                 <span className="font-bold text-white">
                                   {
                                     quality.label
@@ -1265,6 +1328,7 @@ function Tools() {
                                     ✓
                                   </span>
                                 )}
+
                               </div>
 
                               {!available && (
@@ -1272,11 +1336,14 @@ function Tools() {
                                   Not available
                                 </span>
                               )}
+
                             </button>
                           );
                         }
                       )}
+
                     </div>
+
                   </div>
                 )}
 
@@ -1287,7 +1354,9 @@ function Tools() {
                 {isDownloading &&
                   !videoInfo.isPhoto && (
                     <div className="mt-6">
+
                       <div className="flex justify-between text-xs mb-2">
+
                         <span className="text-slate-400">
                           Downloading...
                         </span>
@@ -1295,25 +1364,30 @@ function Tools() {
                         <span className="text-indigo-400 font-bold">
                           {progress}%
                         </span>
+
                       </div>
 
                       <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
                           style={{
                             width: `${progress}%`,
                           }}
                         />
+
                       </div>
+
                     </div>
                   )}
 
                 {/* =================================================
-                    VIDEO BUTTONS
+                    BUTTONS
                 ================================================= */}
 
                 {!videoInfo.isPhoto && (
                   <div className="mt-7 flex gap-3">
+
                     <button
                       type="button"
                       disabled={
@@ -1342,12 +1416,16 @@ function Tools() {
                         ? "Downloading..."
                         : "Download Now"}
                     </button>
+
                   </div>
                 )}
+
               </div>
+
             ) : (
+
               /* =================================================
-                 INPUT FORM
+                 URL FORM
               ================================================= */
 
               <form
@@ -1356,28 +1434,25 @@ function Tools() {
                 }
                 className="mt-6 space-y-5"
               >
+
                 <p className="text-sm leading-relaxed text-slate-400">
                   Paste the public{" "}
                   {activeTool.category}{" "}
-                  link below to extract
-                  available download options.
+                  link below to extract available download options.
                 </p>
 
                 <div>
+
                   <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
                     Target{" "}
-                    {
-                      activeTool.category
-                    }{" "}
+                    {activeTool.category}{" "}
                     URL
                   </label>
 
                   <input
                     type="url"
                     required
-                    value={
-                      inputValue
-                    }
+                    value={inputValue}
                     onChange={(e) =>
                       setInputValue(
                         e.target.value
@@ -1400,11 +1475,14 @@ function Tools() {
                     }
                     className="w-full rounded-2xl border border-slate-800 bg-[#0c1322] px-4 py-3.5 text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
                   />
+
                 </div>
 
                 {isExtracting && (
                   <div>
+
                     <div className="flex justify-between text-xs mb-2">
+
                       <span className="text-slate-400">
                         Extracting details...
                       </span>
@@ -1412,20 +1490,25 @@ function Tools() {
                       <span className="text-indigo-400 font-bold">
                         {progress}%
                       </span>
+
                     </div>
 
                     <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
                         style={{
                           width: `${progress}%`,
                         }}
                       />
+
                     </div>
+
                   </div>
                 )}
 
                 <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+
                   <button
                     type="button"
                     disabled={
@@ -1451,12 +1534,17 @@ function Tools() {
                       ? "Extracting..."
                       : "Extract Media"}
                   </button>
+
                 </div>
+
               </form>
             )}
+
           </div>
+
         </div>
       )}
+
     </div>
   );
 }
