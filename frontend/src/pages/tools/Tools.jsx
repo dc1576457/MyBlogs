@@ -116,7 +116,7 @@ const validatePlatformUrl = (value, slug) => {
 };
 
 const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
+  if (!bytes || Number.isNaN(Number(bytes))) return "Ready";
   const value = Number(bytes);
   if (value <= 0) return "Ready";
   if (value < 1024) return `${value} B`;
@@ -217,7 +217,7 @@ function Tools() {
 
   const closeModal = () => {
     if (isExtracting || isDownloading) return;
-    if (downloadResult?.downloadUrl) {
+    if (downloadResult?.downloadUrl && downloadResult.downloadUrl.startsWith("blob:")) {
       try {
         window.URL.revokeObjectURL(downloadResult.downloadUrl);
       } catch {
@@ -329,7 +329,7 @@ function Tools() {
   };
 
   /* =========================================================
-     DOWNLOAD MEDIA (DUAL-MODE HANDLER)
+     DOWNLOAD MEDIA
   ========================================================= */
   const downloadVideo = async () => {
     if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
@@ -388,7 +388,6 @@ function Tools() {
 
       const contentType = response.headers["content-type"] || "";
 
-      // Check if backend returned JSON (e.g. direct high-speed download link)
       if (contentType.includes("application/json")) {
         const text = await response.data.text();
         let json = {};
@@ -414,7 +413,6 @@ function Tools() {
         throw new Error(json?.message || "Download failed. Please try another quality.");
       }
 
-      // Handle direct file blob
       const blob =
         response.data instanceof Blob
           ? response.data
@@ -463,7 +461,7 @@ function Tools() {
   };
 
   const processAnother = () => {
-    if (downloadResult?.downloadUrl) {
+    if (downloadResult?.downloadUrl && downloadResult.downloadUrl.startsWith("blob:")) {
       try {
         window.URL.revokeObjectURL(downloadResult.downloadUrl);
       } catch {
