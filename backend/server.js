@@ -16,68 +16,24 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 /* =========================================================
-   ROBUST CORS
+   CORS CONFIGURATION
 ========================================================= */
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "https://my-blogs-beige.vercel.app",
-  process.env.FRONTEND_URL,
-]
-  .filter(Boolean)
-  .map((origin) => origin.replace(/\/+$/, ""));
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    const cleanOrigin = origin.replace(/\/+$/, "");
-
-    if (
-      allowedOrigins.includes(cleanOrigin) ||
-      cleanOrigin.endsWith(".vercel.app")
-    ) {
-      return callback(null, true);
-    }
-
-    logger?.warn?.(`CORS allowed origin dynamically: ${origin}`);
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "Accept",
-    "Origin",
-    "X-Requested-With",
-  ],
-  exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
-  optionsSuccessStatus: 200,
-};
-
-app.use(cors(corsOptions));
-
-// Explicit preflight handler to eliminate 405 on OPTIONS
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, Accept, Origin, X-Requested-With"
-    );
-    res.header(
-      "Access-Control-Expose-Headers",
-      "Content-Disposition, Content-Length, Content-Type"
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(
+  cors({
+    origin: true, // Allow all verified incoming origins dynamically
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "Origin",
+      "X-Requested-With",
+    ],
+    exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
+  })
+);
 
 /* =========================================================
    BODY PARSER
@@ -125,13 +81,20 @@ app.get("/health", (req, res) => {
 });
 
 /* =========================================================
-   API ROUTES
+   API ROUTES (Mounted with & without /api to prevent 404/405)
 ========================================================= */
 
 app.use("/api/blogs", blogRoutes);
+app.use("/blogs", blogRoutes);
+
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
 app.use("/api/tools", toolRoutes);
+app.use("/tools", toolRoutes);
+
 app.use("/api/convert", convertRoutes);
+app.use("/convert", convertRoutes);
 
 /* =========================================================
    FRONTEND ERROR LOGGER
