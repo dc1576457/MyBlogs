@@ -2,17 +2,24 @@ import React, { useMemo, useState } from "react";
 import axios from "axios";
 
 /* =========================================================
-   API CONFIG
+   API CONFIG (With hardcoded fallback to Render)
 ========================================================= */
 
-const RAW_API_URL =
-  import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
+const resolveApiUrl = () => {
+  let url =
+    import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
 
-// Ensure HTTPS and no trailing slash
-const API_BASE_URL = RAW_API_URL.replace(/^http:\/\//i, "https://").replace(
-  /\/+$/,
-  ""
-);
+  // Force HTTPS & strip trailing slashes
+  url = url.replace(/^http:\/\//i, "https://").replace(/\/+$/, "");
+
+  // Ensure /api suffix exists
+  if (!url.endsWith("/api")) {
+    url = `${url}/api`;
+  }
+  return url;
+};
+
+const API_BASE_URL = resolveApiUrl();
 
 /* =========================================================
    TOOLS DATA
@@ -24,7 +31,7 @@ const toolsData = [
     name: "YouTube Video Downloader",
     slug: "youtube-video-downloader",
     description:
-      "Extract available video qualities and download public YouTube videos fast.",
+      "Extract available video qualities and download public YouTube videos.",
     category: "YouTube",
     icon: "▶",
     gradient: "from-red-500 via-rose-500 to-pink-600",
@@ -64,15 +71,7 @@ const toolsData = [
   },
 ];
 
-/* =========================================================
-   CATEGORIES
-========================================================= */
-
 const categories = ["All", "YouTube", "Facebook", "Instagram", "Pinterest"];
-
-/* =========================================================
-   QUALITY OPTIONS
-========================================================= */
 
 const QUALITY_OPTIONS = [
   { value: 360, label: "360p" },
@@ -128,14 +127,8 @@ const validatePlatformUrl = (value, slug) => {
   }
 };
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
 const formatBytes = (bytes) => {
-  if (bytes === undefined || bytes === null || Number.isNaN(Number(bytes))) {
-    return "Size unknown";
-  }
+  if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
   const value = Number(bytes);
   if (value <= 0) return "Size unknown";
   if (value < 1024) return `${value} B`;
@@ -163,14 +156,10 @@ const getFilenameFromHeaders = (headers, fallback) => {
 
 const getAxiosErrorMessage = async (error) => {
   if (error?.response?.status === 405) {
-    return "Endpoint configuration issue (405 Method Not Allowed). Please ensure backend is using HTTPS and POST.";
+    return "Method not allowed. Ensure the backend URL is set up correctly with HTTPS.";
   }
 
-  if (
-    error?.response?.data &&
-    typeof error.response.data === "object" &&
-    !(error.response.data instanceof Blob)
-  ) {
+  if (error?.response?.data && !(error.response.data instanceof Blob)) {
     return (
       error.response.data.message ||
       error.response.data.error ||
@@ -195,16 +184,16 @@ const getAxiosErrorMessage = async (error) => {
   }
 
   if (error?.code === "ECONNABORTED") {
-    return "The server took too long to process. Please retry.";
+    return "Server response timed out. Render backend might be waking up (cold start). Please retry in 30 seconds.";
   }
   if (error?.message?.toLowerCase().includes("network error")) {
-    return "Network error. Please check your internet connection and backend status.";
+    return "Network error. Unable to reach backend server.";
   }
   return error?.message || "Something went wrong.";
 };
 
 /* =========================================================
-   MAIN COMPONENT
+   TOOLS COMPONENT
 ========================================================= */
 
 function Tools() {
@@ -266,7 +255,7 @@ function Tools() {
   };
 
   /* =========================================================
-     EXTRACT MEDIA
+     EXTRACT
   ========================================================= */
   const extractVideo = async (event) => {
     event.preventDefault();
@@ -276,11 +265,11 @@ function Tools() {
     setVideoInfo(null);
     setSelectedQuality(null);
     setDownloadResult(null);
-    setProgress(15);
+    setProgress(20);
 
     const cleanUrl = inputValue.trim();
     if (!cleanUrl) {
-      setError("Please enter a URL.");
+      setError("Please enter a valid URL.");
       setProgress(0);
       return;
     }
@@ -294,20 +283,20 @@ function Tools() {
     setIsExtracting(true);
 
     try {
-      const response = await axios({
-        method: "POST",
-        url: `${API_BASE_URL}/tools/extract`,
-        data: {
+      const response = await axios.post(
+        `${API_BASE_URL}/tools/extract`,
+        {
           tool: activeTool.slug,
           platform: activeTool.category.toLowerCase(),
           url: cleanUrl,
         },
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 120000,
-      });
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 120000,
+        }
+      );
 
       setProgress(85);
 
@@ -361,7 +350,7 @@ function Tools() {
   };
 
   /* =========================================================
-     DOWNLOAD MEDIA
+     DOWNLOAD
   ========================================================= */
   const downloadVideo = async () => {
     if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
@@ -398,27 +387,27 @@ function Tools() {
     };
 
     try {
-      const response = await axios({
-        method: "POST",
-        url: `${API_BASE_URL}/tools/download`,
-        data: payload,
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "video/*,image/*,application/octet-stream,application/json",
-        },
-        responseType: "blob",
-        timeout: 15 * 60 * 1000,
-        onDownloadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percent = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            setProgress(Math.min(percent, 99));
-          } else {
-            setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-          }
-        },
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/tools/download`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          responseType: "blob",
+          timeout: 15 * 60 * 1000,
+          onDownloadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percent = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setProgress(Math.min(percent, 99));
+            } else {
+              setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+            }
+          },
+        }
+      );
 
       const contentType = response.headers["content-type"] || "";
 
