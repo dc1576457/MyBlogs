@@ -96,7 +96,7 @@ const getYtDlpErrorMessage = (error) => {
     text.includes("authentication") ||
     text.includes("confirm you're not a bot")
   ) {
-    return "This media requires login/authentication or is bot-protected. Only publicly accessible media is supported.";
+    return "This media requires login or is restricted. Only publicly accessible media is supported.";
   }
   if (text.includes("Private video") || text.includes("private")) {
     return "This content is private and cannot be downloaded.";
@@ -129,7 +129,7 @@ const removeFile = async (filePath) => {
 
 export const extractTool = async (req, res) => {
   try {
-    const { url, platform } = req.body || {};
+    const { url } = req.body || {};
 
     if (!url || !validateUrl(url)) {
       return res.status(400).json({
@@ -232,7 +232,7 @@ export const extractTool = async (req, res) => {
 };
 
 /* =========================================================
-   DOWNLOAD TOOL (FAST STREAMING + YT-DLP FALLBACK)
+   DOWNLOAD TOOL
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
