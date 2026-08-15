@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-
 import {
   ArrowUpRight,
   CalendarDays,
@@ -15,6 +14,7 @@ import {
   Sparkles,
   TrendingUp,
   X,
+  Clock,
 } from "lucide-react";
 
 const API_URL = "https://myblogs-fr9t.onrender.com/api/blogs";
@@ -34,29 +34,20 @@ const DEFAULT_PAGINATION = {
 
 const formatDate = (date, options = {}) => {
   try {
-    return new Date(date || Date.now()).toLocaleDateString(
-      "en-US",
-      {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        ...options,
-      }
-    );
+    return new Date(date || Date.now()).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      ...options,
+    });
   } catch {
     return "";
   }
 };
 
 const getCommentCount = (blog) => {
-  if (typeof blog?.commentsCount === "number") {
-    return blog.commentsCount;
-  }
-
-  if (Array.isArray(blog?.comments)) {
-    return blog.comments.length;
-  }
-
+  if (typeof blog?.commentsCount === "number") return blog.commentsCount;
+  if (Array.isArray(blog?.comments)) return blog.comments.length;
   return 0;
 };
 
@@ -66,16 +57,14 @@ const getCommentCount = (blog) => {
 
 function ImagePlaceholder({ large = false }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950">
+    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
       <div
-        className={`flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] ${
-          large ? "h-20 w-20" : "h-14 w-14"
+        className={`flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] ${
+          large ? "h-14 w-14" : "h-10 w-10"
         }`}
       >
         <ImageIcon
-          className={`text-slate-600 ${
-            large ? "h-9 w-9" : "h-6 w-6"
-          }`}
+          className={`text-slate-500 ${large ? "h-6 w-6" : "h-4 w-4"}`}
         />
       </div>
     </div>
@@ -88,45 +77,40 @@ function ImagePlaceholder({ large = false }) {
 
 function HomeSkeleton() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-pulse">
       {/* Hero skeleton */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="h-[440px] animate-pulse rounded-[2rem] border border-white/10 bg-white/[0.04] lg:col-span-8" />
-
-        <div className="space-y-4 lg:col-span-4">
-          <div className="h-6 w-40 animate-pulse rounded-lg bg-white/[0.05]" />
-
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="h-[360px] rounded-2xl border border-white/10 bg-white/[0.03] lg:col-span-8" />
+        <div className="space-y-3 lg:col-span-4">
+          <div className="h-5 w-28 rounded bg-white/[0.05]" />
           {[1, 2, 3].map((item) => (
             <div
               key={item}
-              className="flex gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3"
             >
-              <div className="h-20 w-24 shrink-0 animate-pulse rounded-xl bg-white/[0.06]" />
-
-              <div className="flex-1 space-y-3">
-                <div className="h-3 w-full animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-3 w-4/5 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-2 w-1/2 animate-pulse rounded bg-white/[0.05]" />
+              <div className="h-16 w-20 shrink-0 rounded-lg bg-white/[0.06]" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-full rounded bg-white/[0.06]" />
+                <div className="h-3 w-3/4 rounded bg-white/[0.06]" />
+                <div className="h-2 w-1/2 rounded bg-white/[0.04]" />
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Cards skeleton */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3, 4, 5, 6].map((item) => (
+      {/* Small Cards Grid skeleton */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
           <div
             key={item}
-            className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]"
+            className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
           >
-            <div className="h-52 animate-pulse bg-white/[0.05]" />
-
-            <div className="space-y-4 p-5">
-              <div className="h-3 w-1/3 animate-pulse rounded bg-white/[0.06]" />
-              <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
-              <div className="h-4 w-4/5 animate-pulse rounded bg-white/[0.06]" />
-              <div className="h-3 w-full animate-pulse rounded bg-white/[0.04]" />
+            <div className="h-36 bg-white/[0.05]" />
+            <div className="space-y-2.5 p-3.5">
+              <div className="h-2.5 w-1/3 rounded bg-white/[0.06]" />
+              <div className="h-3.5 w-full rounded bg-white/[0.06]" />
+              <div className="h-2.5 w-4/5 rounded bg-white/[0.04]" />
             </div>
           </div>
         ))}
@@ -136,19 +120,20 @@ function HomeSkeleton() {
 }
 
 /* =========================================================
-   ARTICLE CARD
+   COMPACT ARTICLE CARD (Small Size & Dense Layout)
 ========================================================= */
 
 function ArticleCard({ blog }) {
   const comments = getCommentCount(blog);
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.035] shadow-xl shadow-black/10 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1.5 hover:border-orange-400/30 hover:bg-white/[0.055] hover:shadow-orange-950/20">
-      {/* Image */}
-      <div className="relative h-56 overflow-hidden bg-slate-900">
-        <div className="absolute left-4 top-4 z-20">
-          <span className="rounded-full border border-orange-300/20 bg-black/60 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-orange-300 backdrop-blur-md">
-            {blog.category || "Article"}
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] shadow-md shadow-black/20 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-orange-500/30 hover:bg-white/[0.05] hover:shadow-orange-950/20">
+      {/* Compact Image Container */}
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900">
+        {/* Category Chip */}
+        <div className="absolute left-2.5 top-2.5 z-20">
+          <span className="rounded-md border border-orange-400/20 bg-black/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-300 backdrop-blur-md">
+            {blog.category || "General"}
           </span>
         </div>
 
@@ -157,56 +142,54 @@ function ArticleCard({ blog }) {
             src={blog.coverImage}
             alt={blog.title || "Article"}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
           <ImagePlaceholder />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070816]/90 via-transparent to-transparent opacity-80" />
 
-        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] font-medium text-slate-300">
-          <span className="flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-orange-400" />
+        {/* Date & Comment pill inside image footer */}
+        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[9px] font-medium text-slate-300">
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3 w-3 text-orange-400" />
             {formatDate(blog.createdAt)}
           </span>
-
-          <span className="flex items-center gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5 text-amber-400" />
+          <span className="flex items-center gap-1">
+            <MessageSquare className="h-3 w-3 text-amber-400" />
             {comments}
           </span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex-1">
-          <h3 className="line-clamp-2 text-lg font-extrabold leading-snug text-white transition-colors duration-300 group-hover:text-orange-300">
+      {/* Compact Content */}
+      <div className="flex flex-1 flex-col justify-between p-3.5">
+        <div>
+          <h3 className="line-clamp-2 text-sm font-bold leading-snug text-white transition-colors duration-200 group-hover:text-orange-300">
             <Link to={`/blogs/${blog.slug}`}>
               {blog.title}
             </Link>
           </h3>
 
-          <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-400">
-            {blog.excerpt ||
-              "Read the complete article and explore more insights from our digital journal."}
+          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-400">
+            {blog.excerpt || "Read the complete post to discover key takeaways and insights."}
           </p>
         </div>
 
-        <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
+        {/* Footer info */}
+        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2.5 text-[10px]">
+          <span className="max-w-[100px] truncate font-medium text-slate-400">
+            {blog.author || "MyBlog"}
+          </span>
+
           <Link
             to={`/blogs/${blog.slug}`}
-            className="inline-flex items-center gap-2 text-xs font-bold text-orange-300 transition-colors hover:text-orange-200"
+            className="inline-flex items-center gap-1 font-bold text-orange-300 hover:text-orange-200"
           >
-            Read article
-            <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            Read
+            <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
-
-          {blog.author && (
-            <span className="max-w-[120px] truncate text-[10px] font-medium text-slate-500">
-              {blog.author}
-            </span>
-          )}
         </div>
       </div>
     </article>
@@ -214,29 +197,27 @@ function ArticleCard({ blog }) {
 }
 
 /* =========================================================
-   TRENDING CARD
+   COMPACT TRENDING CARD
 ========================================================= */
 
 function TrendingCard({ blog, index }) {
   return (
-    <article className="group relative flex gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3.5 backdrop-blur-xl transition-all duration-300 hover:border-orange-400/30 hover:bg-white/[0.06]">
-      <div className="absolute left-0 top-1/2 h-8 w-0.5 -translate-y-1/2 rounded-r-full bg-orange-500 opacity-0 transition-opacity group-hover:opacity-100" />
-
-      {/* Number */}
-      <div className="flex w-5 shrink-0 items-start justify-center pt-1">
-        <span className="text-sm font-black text-slate-600 transition-colors group-hover:text-orange-400">
+    <article className="group relative flex gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-2.5 backdrop-blur-md transition-all duration-200 hover:border-orange-400/30 hover:bg-white/[0.05]">
+      {/* Index Number */}
+      <div className="flex w-4 shrink-0 items-start justify-center pt-0.5">
+        <span className="text-xs font-black text-slate-600 group-hover:text-orange-400 transition-colors">
           0{index + 1}
         </span>
       </div>
 
-      {/* Image */}
-      <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-900">
+      {/* Thumbnail */}
+      <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-900">
         {blog.coverImage ? (
           <img
             src={blog.coverImage}
             alt={blog.title || "Article"}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
           <ImagePlaceholder />
@@ -244,23 +225,18 @@ function TrendingCard({ blog, index }) {
       </div>
 
       {/* Content */}
-      <div className="min-w-0 flex-1">
-        <h4 className="line-clamp-2 text-xs font-bold leading-5 text-slate-200 transition-colors group-hover:text-orange-300">
-          <Link to={`/blogs/${blog.slug}`}>
-            {blog.title}
-          </Link>
+      <div className="min-w-0 flex-1 flex flex-col justify-center">
+        <h4 className="line-clamp-2 text-xs font-semibold leading-snug text-slate-200 group-hover:text-orange-300 transition-colors">
+          <Link to={`/blogs/${blog.slug}`}>{blog.title}</Link>
         </h4>
 
-        <div className="mt-2 flex items-center gap-3 text-[9px] text-slate-500">
+        <div className="mt-1.5 flex items-center gap-2.5 text-[9px] text-slate-400">
           <span className="flex items-center gap-1">
-            <CalendarDays className="h-3 w-3 text-orange-400" />
-            {formatDate(blog.createdAt, {
-              year: undefined,
-            })}
+            <CalendarDays className="h-2.5 w-2.5 text-orange-400" />
+            {formatDate(blog.createdAt, { year: undefined })}
           </span>
-
           <span className="flex items-center gap-1">
-            <MessageSquare className="h-3 w-3 text-amber-400" />
+            <MessageSquare className="h-2.5 w-2.5 text-amber-400" />
             {getCommentCount(blog)}
           </span>
         </div>
@@ -270,67 +246,41 @@ function TrendingCard({ blog, index }) {
 }
 
 /* =========================================================
-   HOME
+   HOME COMPONENT
 ========================================================= */
 
 export default function Home() {
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const [selectedCategory, setSelectedCategory] =
-    useState("All");
-
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [pagination, setPagination] = useState(
-    DEFAULT_PAGINATION
-  );
-
-  /* =======================================================
-     FETCH BLOGS
-  ======================================================= */
+  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
 
   const fetchBlogs = async (page) => {
     setLoading(true);
-
     try {
       const response = await axios.get(
-        `${API_URL}?status=published&page=${page}&limit=10`,
-        {
-          timeout: 15000,
-        }
+        `${API_URL}?status=published&page=${page}&limit=12`,
+        { timeout: 15000 }
       );
 
       if (response.data?.success) {
-        const fetchedBlogs =
-          response.data.blogs || [];
-
+        const fetchedBlogs = response.data.blogs || [];
         setBlogs(fetchedBlogs);
 
-        const apiPagination =
-          response.data.pagination;
-
+        const apiPagination = response.data.pagination;
         setPagination(
           apiPagination || {
             currentPage: Number(page),
-            limit: 10,
-            totalBlogs:
-              response.data.total ||
-              fetchedBlogs.length ||
-              0,
-            totalPages:
-              response.data.totalPages || 1,
+            limit: 12,
+            totalBlogs: response.data.total || fetchedBlogs.length || 0,
+            totalPages: response.data.totalPages || 1,
             hasNextPage:
               response.data.hasNextPage ??
-              Number(page) <
-                Number(
-                  response.data.totalPages || 1
-                ),
+              Number(page) < Number(response.data.totalPages || 1),
             hasPreviousPage:
-              response.data.hasPreviousPage ??
-              Number(page) > 1,
+              response.data.hasPreviousPage ?? Number(page) > 1,
           }
         );
       } else {
@@ -338,11 +288,7 @@ export default function Home() {
         setPagination(DEFAULT_PAGINATION);
       }
     } catch (error) {
-      console.error(
-        "Home blogs fetch error:",
-        error
-      );
-
+      console.error("Home blogs fetch error:", error);
       setBlogs([]);
       setPagination(DEFAULT_PAGINATION);
     } finally {
@@ -354,120 +300,46 @@ export default function Home() {
     fetchBlogs(currentPage);
   }, [currentPage]);
 
-  /* =======================================================
-     CATEGORIES
-  ======================================================= */
-
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
-      new Set(
-        blogs
-          .map((blog) => blog.category)
-          .filter(Boolean)
-      )
+      new Set(blogs.map((b) => b.category).filter(Boolean))
     );
-
     return ["All", ...uniqueCategories];
   }, [blogs]);
 
-  /* =======================================================
-     FILTER
-  ======================================================= */
-
   const filteredBlogs = useMemo(() => {
-    const search =
-      searchQuery.toLowerCase().trim();
-
+    const search = searchQuery.toLowerCase().trim();
     return blogs.filter((blog) => {
       const matchesCategory =
-        selectedCategory === "All" ||
-        blog.category === selectedCategory;
+        selectedCategory === "All" || blog.category === selectedCategory;
 
       const matchesSearch =
         !search ||
-        blog.title
-          ?.toLowerCase()
-          .includes(search) ||
-        blog.excerpt
-          ?.toLowerCase()
-          .includes(search) ||
-        blog.author
-          ?.toLowerCase()
-          .includes(search) ||
-        blog.category
-          ?.toLowerCase()
-          .includes(search);
+        blog.title?.toLowerCase().includes(search) ||
+        blog.excerpt?.toLowerCase().includes(search) ||
+        blog.author?.toLowerCase().includes(search) ||
+        blog.category?.toLowerCase().includes(search);
 
-      return (
-        matchesCategory &&
-        matchesSearch
-      );
+      return matchesCategory && matchesSearch;
     });
-  }, [
-    blogs,
-    selectedCategory,
-    searchQuery,
-  ]);
+  }, [blogs, selectedCategory, searchQuery]);
 
-  /* =======================================================
-     LAYOUT DATA
-  ======================================================= */
+  const heroBlog = filteredBlogs.length > 0 ? filteredBlogs[0] : null;
+  const sidebarBlogs = filteredBlogs.length > 1 ? filteredBlogs.slice(1, 4) : [];
+  const gridBlogs = filteredBlogs.length > 4 ? filteredBlogs.slice(4) : [];
 
-  const heroBlog =
-    filteredBlogs.length > 0
-      ? filteredBlogs[0]
-      : null;
-
-  const sidebarBlogs =
-    filteredBlogs.length > 1
-      ? filteredBlogs.slice(1, 4)
-      : [];
-
-  const gridBlogs =
-    filteredBlogs.length > 4
-      ? filteredBlogs.slice(4)
-      : [];
-
-  /* =======================================================
-     CATEGORY CHANGE
-  ======================================================= */
-
-  const handleCategoryChange = (
-    category
-  ) => {
+  const handleCategoryChange = (category) => {
     setSelectedCategory(category);
     setCurrentPage(1);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  /* =======================================================
-     PAGE CHANGE
-  ======================================================= */
 
   const handlePageChange = (newPage) => {
-    if (
-      newPage < 1 ||
-      newPage > pagination.totalPages ||
-      newPage === currentPage
-    ) {
+    if (newPage < 1 || newPage > pagination.totalPages || newPage === currentPage)
       return;
-    }
-
     setCurrentPage(newPage);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  /* =======================================================
-     RESET FILTERS
-  ======================================================= */
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -475,402 +347,186 @@ export default function Home() {
     setCurrentPage(1);
   };
 
-  /* =======================================================
-     PAGE NUMBERS
-  ======================================================= */
-
-  const pageNumbers = useMemo(() => {
-    const total =
-      Number(pagination.totalPages) || 1;
-
-    const current =
-      Number(currentPage) || 1;
-
-    if (total <= 7) {
-      return Array.from(
-        { length: total },
-        (_, index) => index + 1
-      );
-    }
-
-    if (current <= 4) {
-      return [
-        1,
-        2,
-        3,
-        4,
-        5,
-        "...",
-        total,
-      ];
-    }
-
-    if (current >= total - 3) {
-      return [
-        1,
-        "...",
-        total - 4,
-        total - 3,
-        total - 2,
-        total - 1,
-        total,
-      ];
-    }
-
-    return [
-      1,
-      "...",
-      current - 1,
-      current,
-      current + 1,
-      "...",
-      total,
-    ];
-  }, [
-    currentPage,
-    pagination.totalPages,
-  ]);
-
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#070816] pb-24 font-sans text-white selection:bg-orange-500/30 selection:text-orange-200">
-      {/* ===================================================
-          BACKGROUND
-      =================================================== */}
-
+    <div className="relative min-h-screen bg-[#070816] text-white pb-20 font-sans selection:bg-orange-500/30 selection:text-orange-200">
+      {/* Background ambient lighting */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-orange-600/10 blur-[130px]" />
-
-        <div className="absolute right-[-180px] top-[30%] h-[550px] w-[550px] rounded-full bg-indigo-600/10 blur-[150px]" />
-
-        <div className="absolute bottom-[-200px] left-[25%] h-[500px] w-[500px] rounded-full bg-purple-600/10 blur-[150px]" />
-
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_40%)]" />
+        <div className="absolute -left-32 -top-32 h-[450px] w-[450px] rounded-full bg-orange-600/10 blur-[120px]" />
+        <div className="absolute right-[-100px] top-[20%] h-[450px] w-[450px] rounded-full bg-indigo-600/10 blur-[140px]" />
       </div>
 
-      {/* ===================================================
-          HERO HEADER
-      =================================================== */}
-
-      <header className="relative z-10 mx-auto max-w-7xl px-4 pb-10 pt-12 sm:px-6 lg:pt-16">
-        <div className="mx-auto max-w-4xl text-center">
-          {/* Small Badge */}
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-400/[0.07] px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-orange-300 backdrop-blur-md">
-            <Sparkles className="h-3.5 w-3.5" />
-            MyBlog Journal
+      {/* Header & Search */}
+      <header className="relative z-10 mx-auto max-w-7xl px-4 pt-8 pb-6 sm:px-6">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="mb-3.5 inline-flex items-center gap-1.5 rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-orange-300 backdrop-blur-md">
+            <Sparkles className="h-3 w-3" />
+            Discover & Explore
           </div>
 
-          <h1 className="text-4xl font-black leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-7xl">
-            Ideas worth
-            <br />
-
+          <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
+            Insights, Stories &{" "}
             <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
-              reading & sharing.
+              Ideas.
             </span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-            Discover thoughtful articles, practical
-            guides and fresh ideas created for
-            modern learners, creators and thinkers.
-          </p>
-
-          {/* =================================================
-              SEARCH
-          ================================================= */}
-
-          <div className="mx-auto mt-8 max-w-2xl">
-            <div className="group relative">
-              <div className="absolute -inset-1 rounded-[1.4rem] bg-gradient-to-r from-orange-500/30 via-amber-400/20 to-purple-500/20 opacity-60 blur-lg transition duration-500 group-focus-within:opacity-100" />
-
-              <div className="relative flex items-center overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/75 px-4 py-3.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
-                <Search className="mr-3 h-5 w-5 shrink-0 text-orange-400" />
-
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) =>
-                    setSearchQuery(
-                      e.target.value
-                    )
-                  }
-                  placeholder="Search articles, topics or authors..."
-                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600 focus:ring-0 sm:text-base"
-                />
-
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSearchQuery("")
-                    }
-                    aria-label="Clear search"
-                    className="ml-2 rounded-lg p-1.5 text-slate-500 transition hover:bg-white/10 hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+          {/* Search Box */}
+          <div className="mx-auto mt-6 max-w-xl">
+            <div className="relative flex items-center rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 shadow-xl shadow-black/20 backdrop-blur-md focus-within:border-orange-400/40">
+              <Search className="mr-2.5 h-4 w-4 shrink-0 text-orange-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search topics, authors, or keywords..."
+                className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-slate-500 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="rounded-md p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* ===================================================
-          MAIN
-      =================================================== */}
-
+      {/* Main Container */}
       <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
-        {/* =================================================
-            CATEGORY NAV
-        ================================================= */}
-
-        <div className="mb-10 border-b border-white/10 pb-5">
-          <div className="flex items-center gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="mr-1 flex shrink-0 items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-              <Compass className="h-4 w-4 text-orange-400" />
-              Categories
-            </div>
-
-            {categories.map((category) => {
-              const active =
-                selectedCategory ===
-                category;
-
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() =>
-                    handleCategoryChange(
-                      category
-                    )
-                  }
-                  className={`shrink-0 rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
-                    active
-                      ? "border-orange-400/30 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
-                      : "border-white/10 bg-white/[0.025] text-slate-400 hover:border-orange-400/20 hover:bg-white/[0.06] hover:text-white"
-                  }`}
-                >
-                  {category}
-                </button>
-              );
-            })}
+        {/* Categories Bar */}
+        <div className="mb-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <div className="mr-2 flex shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <Compass className="h-3.5 w-3.5 text-orange-400" />
+            Topics:
           </div>
+
+          {categories.map((category) => {
+            const active = selectedCategory === category;
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => handleCategoryChange(category)}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 ${
+                  active
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm shadow-orange-500/30"
+                    : "border border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-white"
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
         </div>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
+        {/* Content Area */}
         {loading ? (
           <HomeSkeleton />
         ) : filteredBlogs.length === 0 ? (
-          /* ===============================================
-             EMPTY STATE
-          =============================================== */
-
-          <section className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.025] px-6 py-20 text-center backdrop-blur-xl sm:px-10">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-orange-400/20 bg-orange-400/[0.07]">
-              <Search className="h-7 w-7 text-orange-400" />
-            </div>
-
-            <h2 className="mt-6 text-xl font-black text-white">
-              No articles found
-            </h2>
-
-            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500">
-              We couldn't find any articles
-              matching your current search or
-              category. Try changing your filters.
-            </p>
-
+          /* Empty State */
+          <div className="my-10 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-center">
+            <Search className="mx-auto h-8 w-8 text-orange-400/80" />
+            <h3 className="mt-4 text-base font-bold text-white">No articles found</h3>
+            <p className="mt-1 text-xs text-slate-400">Try adjusting your keyword or category filter.</p>
             <button
-              type="button"
               onClick={resetFilters}
-              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-orange-500/20 transition hover:scale-[1.02] hover:shadow-orange-500/30"
+              className="mt-5 rounded-lg bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-600"
             >
-              <Sparkles className="h-4 w-4" />
-              Reset filters
+              Reset Filters
             </button>
-          </section>
+          </div>
         ) : (
           <>
-            {/* =============================================
-                HERO + TRENDING
-            ============================================= */}
-
+            {/* Featured Hero + Trending Layout */}
             {heroBlog && (
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                {/* =========================================
-                    HERO ARTICLE
-                ========================================= */}
-
-                <article className="group relative min-h-[470px] overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/30 lg:col-span-8">
-                  {/* Image */}
+              <section className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+                {/* Hero Feature */}
+                <article className="group relative min-h-[340px] sm:min-h-[380px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-xl lg:col-span-8 flex flex-col justify-end">
                   <div className="absolute inset-0">
                     {heroBlog.coverImage ? (
                       <img
                         src={heroBlog.coverImage}
-                        alt={
-                          heroBlog.title ||
-                          "Featured article"
-                        }
-                        className="h-full w-full object-cover transition duration-[1200ms] group-hover:scale-105"
+                        alt={heroBlog.title || "Featured"}
+                        className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
                       />
                     ) : (
                       <ImagePlaceholder large />
                     )}
-
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#050611] via-[#08091a]/75 to-transparent" />
-
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#070816] via-[#070816]/70 to-transparent" />
                   </div>
 
-                  {/* Category */}
-                  <div className="absolute left-5 top-5 z-20">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-orange-300/20 bg-black/55 px-3.5 py-2 text-[9px] font-black uppercase tracking-[0.17em] text-orange-300 backdrop-blur-xl">
+                  <div className="absolute left-4 top-4 z-20">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-orange-400/30 bg-black/60 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-300 backdrop-blur-md">
                       <Flame className="h-3 w-3" />
-                      {heroBlog.category ||
-                        "Featured"}
+                      Featured
                     </span>
                   </div>
 
-                  {/* Featured label */}
-                  <div className="absolute right-5 top-5 z-20 hidden rounded-full border border-white/10 bg-black/40 px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-300 backdrop-blur-xl sm:block">
-                    Featured story
-                  </div>
-
-                  {/* Content */}
-                  <div className="absolute bottom-0 left-0 right-0 z-10 p-6 sm:p-8 lg:p-10">
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] font-medium text-slate-300">
-                      <span className="flex items-center gap-1.5">
-                        <CalendarDays className="h-3.5 w-3.5 text-orange-400" />
-                        {formatDate(
-                          heroBlog.createdAt
-                        )}
+                  {/* Hero Details */}
+                  <div className="relative z-10 p-5 sm:p-7">
+                    <div className="flex items-center gap-3 text-[10px] text-slate-300">
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3 text-orange-400" />
+                        {formatDate(heroBlog.createdAt)}
                       </span>
-
-                      <span className="h-1 w-1 rounded-full bg-slate-500" />
-
-                      <span className="flex items-center gap-1.5">
-                        <MessageSquare className="h-3.5 w-3.5 text-amber-400" />
-                        {getCommentCount(
-                          heroBlog
-                        )}{" "}
-                        comments
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3 text-amber-400" />
+                        {getCommentCount(heroBlog)} comments
                       </span>
                     </div>
 
-                    <h2 className="mt-4 max-w-3xl text-2xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
-                      <Link
-                        to={`/blogs/${heroBlog.slug}`}
-                        className="transition-colors hover:text-orange-200"
-                      >
+                    <h2 className="mt-2.5 max-w-2xl text-xl sm:text-2xl lg:text-3xl font-extrabold leading-snug text-white group-hover:text-orange-200 transition-colors">
+                      <Link to={`/blogs/${heroBlog.slug}`}>
                         {heroBlog.title}
                       </Link>
                     </h2>
 
-                    <p className="mt-4 max-w-2xl line-clamp-2 text-sm leading-6 text-slate-300">
-                      {heroBlog.excerpt ||
-                        "Explore this thoughtfully written article and discover practical insights, ideas and useful information."}
+                    <p className="mt-2 max-w-xl line-clamp-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                      {heroBlog.excerpt || "Dive in to read this comprehensive post and gain fresh perspectives."}
                     </p>
 
-                    <div className="mt-6 flex flex-wrap items-center gap-4">
+                    <div className="mt-4 flex items-center justify-between">
                       <Link
                         to={`/blogs/${heroBlog.slug}`}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-xs font-black text-white shadow-lg shadow-orange-600/25 transition-all hover:-translate-y-0.5 hover:shadow-orange-500/40"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-orange-500/20 hover:scale-[1.02] transition-transform"
                       >
-                        Read full story
-                        <ArrowUpRight className="h-4 w-4" />
+                        Read Full Story
+                        <ArrowUpRight className="h-3.5 w-3.5" />
                       </Link>
 
-                      {/* Hero Pagination */}
-                      <div className="flex items-center rounded-xl border border-white/10 bg-black/40 p-1 backdrop-blur-xl">
-                        <button
-                          type="button"
-                          disabled={
-                            !pagination.hasPreviousPage
-                          }
-                          onClick={() =>
-                            handlePageChange(
-                              currentPage - 1
-                            )
-                          }
-                          aria-label="Previous page"
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-20"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-
-                        <span className="px-3 text-[10px] font-bold text-slate-300">
-                          {pagination.currentPage}{" "}
-                          /{" "}
-                          {pagination.totalPages}
-                        </span>
-
-                        <button
-                          type="button"
-                          disabled={
-                            !pagination.hasNextPage
-                          }
-                          onClick={() =>
-                            handlePageChange(
-                              currentPage + 1
-                            )
-                          }
-                          aria-label="Next page"
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-20"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <span className="text-[10px] text-slate-400">By {heroBlog.author || "Editor"}</span>
                     </div>
                   </div>
                 </article>
 
-                {/* =========================================
-                    TRENDING
-                ========================================= */}
-
+                {/* Trending Stories Sidebar */}
                 <aside className="flex flex-col lg:col-span-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10">
-                        <Flame className="h-4 w-4 text-orange-400" />
-                      </div>
-
-                      <div>
-                        <h3 className="text-xs font-black uppercase tracking-[0.15em] text-white">
-                          Trending
-                        </h3>
-
-                        <p className="mt-0.5 text-[9px] text-slate-600">
-                          Popular stories
-                        </p>
-                      </div>
+                  <div className="mb-2.5 flex items-center justify-between px-1">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-orange-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Trending Stories
+                      </span>
                     </div>
-
-                    <TrendingUp className="h-4 w-4 text-slate-600" />
                   </div>
 
-                  <div className="flex flex-1 flex-col gap-3">
+                  <div className="flex flex-1 flex-col gap-2.5">
                     {sidebarBlogs.length > 0 ? (
-                      sidebarBlogs.map(
-                        (blog, index) => (
-                          <TrendingCard
-                            key={
-                              blog._id ||
-                              blog.slug
-                            }
-                            blog={blog}
-                            index={index}
-                          />
-                        )
-                      )
+                      sidebarBlogs.map((blog, index) => (
+                        <TrendingCard
+                          key={blog._id || blog.slug}
+                          blog={blog}
+                          index={index}
+                        />
+                      ))
                     ) : (
-                      <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-slate-600">
-                        More stories coming
-                        soon.
+                      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-white/10 p-6 text-center text-xs text-slate-500">
+                        No trending stories available
                       </div>
                     )}
                   </div>
@@ -878,41 +534,21 @@ export default function Home() {
               </section>
             )}
 
-            {/* =============================================
-                LATEST ARTICLES
-            ============================================= */}
-
+            {/* Small Compact Grid Section */}
             {gridBlogs.length > 0 && (
-              <section className="mt-14">
-                <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1 w-8 rounded-full bg-gradient-to-r from-orange-500 to-amber-400" />
-
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-orange-400">
-                        Fresh content
-                      </span>
-                    </div>
-
-                    <h3 className="mt-2 text-xl font-black text-white sm:text-2xl">
-                      Latest Journal Entries
-                    </h3>
-                  </div>
-
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                    {gridBlogs.length} articles
+              <section className="mt-10">
+                <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">
+                    Latest Articles
+                  </h3>
+                  <span className="text-[11px] text-slate-400">
+                    {gridBlogs.length} Stories
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {gridBlogs.map((blog) => (
-                    <ArticleCard
-                      key={
-                        blog._id ||
-                        blog.slug
-                      }
-                      blog={blog}
-                    />
+                    <ArticleCard key={blog._id || blog.slug} blog={blog} />
                   ))}
                 </div>
               </section>
@@ -920,90 +556,36 @@ export default function Home() {
           </>
         )}
 
-        {/* =================================================
-            BOTTOM PAGINATION
-        ================================================= */}
+        {/* Compact Pagination */}
+        {!loading && pagination.totalPages > 1 && (
+          <div className="mt-10 flex items-center justify-center gap-2 border-t border-white/10 pt-6">
+            <button
+              type="button"
+              disabled={!pagination.hasPreviousPage}
+              onClick={() => handlePageChange(currentPage - 1)}
+              className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:bg-white/[0.08] hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
 
-        {!loading &&
-          pagination.totalPages > 1 && (
-            <div className="mt-14 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-8">
-              {/* Previous */}
-              <button
-                type="button"
-                disabled={
-                  !pagination.hasPreviousPage
-                }
-                onClick={() =>
-                  handlePageChange(
-                    currentPage - 1
-                  )
-                }
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400 transition hover:border-orange-400/20 hover:bg-orange-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  Previous
-                </span>
-              </button>
-
-              {/* Numbers */}
-              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.025] p-1">
-                {pageNumbers.map(
-                  (page, index) => {
-                    if (page === "...") {
-                      return (
-                        <span
-                          key={`dots-${index}`}
-                          className="flex h-9 w-7 items-center justify-center text-xs text-slate-600"
-                        >
-                          ...
-                        </span>
-                      );
-                    }
-
-                    return (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() =>
-                          handlePageChange(
-                            page
-                          )
-                        }
-                        className={`h-9 w-9 rounded-lg text-[10px] font-black transition-all ${
-                          currentPage ===
-                          page
-                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
-                            : "text-slate-500 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    );
-                  }
-                )}
-              </div>
-
-              {/* Next */}
-              <button
-                type="button"
-                disabled={
-                  !pagination.hasNextPage
-                }
-                onClick={() =>
-                  handlePageChange(
-                    currentPage + 1
-                  )
-                }
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400 transition hover:border-orange-400/20 hover:bg-orange-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"
-              >
-                <span className="hidden sm:inline">
-                  Next
-                </span>
-                <ChevronRight className="h-4 w-4" />
-              </button>
+            <div className="flex items-center gap-1">
+              <span className="px-3 text-xs font-bold text-slate-300">
+                Page {pagination.currentPage} of {pagination.totalPages}
+              </span>
             </div>
-          )}
+
+            <button
+              type="button"
+              disabled={!pagination.hasNextPage}
+              onClick={() => handlePageChange(currentPage + 1)}
+              className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:bg-white/[0.08] hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );
