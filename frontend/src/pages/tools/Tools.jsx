@@ -116,7 +116,7 @@ const validatePlatformUrl = (value, slug) => {
 };
 
 const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(Number(bytes))) return "Ready";
+  if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
   const value = Number(bytes);
   if (value <= 0) return "Ready";
   if (value < 1024) return `${value} B`;
@@ -217,7 +217,7 @@ function Tools() {
 
   const closeModal = () => {
     if (isExtracting || isDownloading) return;
-    if (downloadResult?.downloadUrl && downloadResult.downloadUrl.startsWith("blob:")) {
+    if (downloadResult?.downloadUrl) {
       try {
         window.URL.revokeObjectURL(downloadResult.downloadUrl);
       } catch {
@@ -329,7 +329,7 @@ function Tools() {
   };
 
   /* =========================================================
-     DOWNLOAD MEDIA
+     DOWNLOAD MEDIA (DUAL-MODE HANDLER)
   ========================================================= */
   const downloadVideo = async () => {
     if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
@@ -388,7 +388,7 @@ function Tools() {
 
       const contentType = response.headers["content-type"] || "";
 
-      // Check if backend returned JSON error
+      // Check if backend returned JSON (e.g. direct high-speed download link)
       if (contentType.includes("application/json")) {
         const text = await response.data.text();
         let json = {};
@@ -397,6 +397,20 @@ function Tools() {
         } catch (e) {
           // Ignore
         }
+
+        if (json.downloadUrl) {
+          setProgress(100);
+          setDownloadResult({
+            success: true,
+            downloadUrl: json.downloadUrl,
+            filename: json.filename || `${activeTool.category.toLowerCase()}-video.mp4`,
+            quality: selectedQuality || 720,
+            size: json.size || 0,
+            isPhoto: false,
+          });
+          return;
+        }
+
         throw new Error(json?.message || "Download failed. Please try another quality.");
       }
 
@@ -449,7 +463,7 @@ function Tools() {
   };
 
   const processAnother = () => {
-    if (downloadResult?.downloadUrl && downloadResult.downloadUrl.startsWith("blob:")) {
+    if (downloadResult?.downloadUrl) {
       try {
         window.URL.revokeObjectURL(downloadResult.downloadUrl);
       } catch {
@@ -657,6 +671,8 @@ function Tools() {
                 <a
                   href={downloadResult.downloadUrl}
                   download={downloadResult.filename}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4 text-sm font-bold text-white hover:from-emerald-400 hover:to-teal-500 transition shadow-lg shadow-emerald-500/20"
                 >
                   ⬇ Download File
