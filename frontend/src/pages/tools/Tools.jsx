@@ -2,24 +2,16 @@ import React, { useMemo, useState } from "react";
 import axios from "axios";
 
 /* =========================================================
-   API CONFIG (With hardcoded fallback to Render)
+   API CONFIG
 ========================================================= */
 
-const resolveApiUrl = () => {
-  let url =
-    import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
+const RAW_API_URL =
+  import.meta.env.VITE_API_URL || "https://myblogs-fr9t.onrender.com/api";
 
-  // Force HTTPS & strip trailing slashes
-  url = url.replace(/^http:\/\//i, "https://").replace(/\/+$/, "");
-
-  // Ensure /api suffix exists
-  if (!url.endsWith("/api")) {
-    url = `${url}/api`;
-  }
-  return url;
-};
-
-const API_BASE_URL = resolveApiUrl();
+const API_BASE_URL = RAW_API_URL.replace(/^http:\/\//i, "https://").replace(
+  /\/+$/,
+  ""
+);
 
 /* =========================================================
    TOOLS DATA
@@ -31,7 +23,7 @@ const toolsData = [
     name: "YouTube Video Downloader",
     slug: "youtube-video-downloader",
     description:
-      "Extract available video qualities and download public YouTube videos.",
+      "Extract available video qualities and download public YouTube videos fast.",
     category: "YouTube",
     icon: "▶",
     gradient: "from-red-500 via-rose-500 to-pink-600",
@@ -80,10 +72,6 @@ const QUALITY_OPTIONS = [
   { value: 1080, label: "1080p Full HD" },
 ];
 
-/* =========================================================
-   URL VALIDATION
-========================================================= */
-
 const validatePlatformUrl = (value, slug) => {
   try {
     if (!value?.trim()) return false;
@@ -130,7 +118,7 @@ const validatePlatformUrl = (value, slug) => {
 const formatBytes = (bytes) => {
   if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
   const value = Number(bytes);
-  if (value <= 0) return "Size unknown";
+  if (value <= 0) return "Ready";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
@@ -155,10 +143,6 @@ const getFilenameFromHeaders = (headers, fallback) => {
 };
 
 const getAxiosErrorMessage = async (error) => {
-  if (error?.response?.status === 405) {
-    return "Method not allowed. Ensure the backend URL is set up correctly with HTTPS.";
-  }
-
   if (error?.response?.data && !(error.response.data instanceof Blob)) {
     return (
       error.response.data.message ||
@@ -184,16 +168,13 @@ const getAxiosErrorMessage = async (error) => {
   }
 
   if (error?.code === "ECONNABORTED") {
-    return "Server response timed out. Render backend might be waking up (cold start). Please retry in 30 seconds.";
-  }
-  if (error?.message?.toLowerCase().includes("network error")) {
-    return "Network error. Unable to reach backend server.";
+    return "Server request timed out. Please try again.";
   }
   return error?.message || "Something went wrong.";
 };
 
 /* =========================================================
-   TOOLS COMPONENT
+   MAIN COMPONENT
 ========================================================= */
 
 function Tools() {
@@ -255,7 +236,7 @@ function Tools() {
   };
 
   /* =========================================================
-     EXTRACT
+     EXTRACT MEDIA
   ========================================================= */
   const extractVideo = async (event) => {
     event.preventDefault();
@@ -265,11 +246,11 @@ function Tools() {
     setVideoInfo(null);
     setSelectedQuality(null);
     setDownloadResult(null);
-    setProgress(20);
+    setProgress(15);
 
     const cleanUrl = inputValue.trim();
     if (!cleanUrl) {
-      setError("Please enter a valid URL.");
+      setError("Please enter a URL.");
       setProgress(0);
       return;
     }
@@ -291,9 +272,7 @@ function Tools() {
           url: cleanUrl,
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           timeout: 120000,
         }
       );
@@ -325,7 +304,7 @@ function Tools() {
         .filter((h) => Number.isFinite(h) && h > 0);
 
       const uniqueHeights = [...new Set(availableHeights)];
-      const preferredQuality = [1080, 720, 480, 360].find((q) =>
+      const preferredQuality = [720, 360, 480, 1080].find((q) =>
         uniqueHeights.includes(q)
       );
 
@@ -350,7 +329,7 @@ function Tools() {
   };
 
   /* =========================================================
-     DOWNLOAD
+     DOWNLOAD MEDIA (DUAL-MODE HANDLER)
   ========================================================= */
   const downloadVideo = async () => {
     if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
@@ -364,7 +343,7 @@ function Tools() {
     setError("");
     setDownloadResult(null);
     setIsDownloading(true);
-    setProgress(10);
+    setProgress(15);
 
     const selectedFormat = Array.isArray(videoInfo.formats)
       ? videoInfo.formats.find(
@@ -376,9 +355,9 @@ function Tools() {
       tool: activeTool.slug,
       platform: activeTool.category.toLowerCase(),
       url: cleanUrl,
-      quality: selectedQuality || "best",
-      format: selectedQuality ? `${selectedQuality}p` : "best",
-      formatId: selectedFormat?.formatId || null,
+      quality: selectedQuality || 720,
+      format: selectedQuality ? `${selectedQuality}p` : "720p",
+      formatId: selectedFormat?.formatId || String(selectedQuality || "720"),
       title: videoInfo.title || `${activeTool.category}-media`,
       isPhoto: Boolean(videoInfo.isPhoto),
       directUrl: videoInfo.isPhoto
@@ -391,11 +370,9 @@ function Tools() {
         `${API_BASE_URL}/tools/download`,
         payload,
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           responseType: "blob",
-          timeout: 15 * 60 * 1000,
+          timeout: 120000,
           onDownloadProgress: (progressEvent) => {
             if (progressEvent.total) {
               const percent = Math.round(
@@ -411,18 +388,33 @@ function Tools() {
 
       const contentType = response.headers["content-type"] || "";
 
+      // Check if backend returned JSON (e.g. direct high-speed download link)
       if (contentType.includes("application/json")) {
         const text = await response.data.text();
-        let message = "Download failed.";
+        let json = {};
         try {
-          const json = JSON.parse(text);
-          message = json?.message || json?.error || message;
-        } catch {
-          if (text) message = text;
+          json = JSON.parse(text);
+        } catch (e) {
+          // Ignore
         }
-        throw new Error(message);
+
+        if (json.downloadUrl) {
+          setProgress(100);
+          setDownloadResult({
+            success: true,
+            downloadUrl: json.downloadUrl,
+            filename: json.filename || `${activeTool.category.toLowerCase()}-video.mp4`,
+            quality: selectedQuality || 720,
+            size: json.size || 0,
+            isPhoto: false,
+          });
+          return;
+        }
+
+        throw new Error(json?.message || "Download failed. Please try another quality.");
       }
 
+      // Handle direct file blob
       const blob =
         response.data instanceof Blob
           ? response.data
@@ -440,7 +432,6 @@ function Tools() {
       let fallbackExtension = isPhoto ? "jpg" : "mp4";
       if (contentType.includes("png")) fallbackExtension = "png";
       else if (contentType.includes("webp")) fallbackExtension = "webp";
-      else if (contentType.includes("webm")) fallbackExtension = "webm";
 
       const defaultFilename = `${activeTool.category.toLowerCase()}-${
         selectedQuality || "media"
@@ -674,15 +665,14 @@ function Tools() {
                   is ready.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  File size: {formatBytes(downloadResult.size)}
-                </p>
-                <p className="mt-1 text-xs text-slate-600 truncate">
-                  {downloadResult.filename}
+                  File status: {formatBytes(downloadResult.size)}
                 </p>
 
                 <a
                   href={downloadResult.downloadUrl}
                   download={downloadResult.filename}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4 text-sm font-bold text-white hover:from-emerald-400 hover:to-teal-500 transition shadow-lg shadow-emerald-500/20"
                 >
                   ⬇ Download File
@@ -714,11 +704,6 @@ function Tools() {
                       <h4 className="font-bold text-white line-clamp-2">
                         {videoInfo.title || "Media"}
                       </h4>
-                      {videoInfo.duration > 0 && (
-                        <p className="mt-1 text-xs text-slate-500">
-                          Duration: {videoInfo.duration}s
-                        </p>
-                      )}
                       {videoInfo.uploader && (
                         <p className="mt-1 text-xs text-slate-500">
                           By: {videoInfo.uploader}
