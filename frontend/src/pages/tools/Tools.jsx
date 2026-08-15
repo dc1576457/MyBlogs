@@ -600,12 +600,8 @@ export default function Tools() {
 
       {/* Hero Header */}
       <header className="relative z-10 mx-auto max-w-7xl px-4 pt-16 pb-10 sm:px-6 lg:pt-20 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-widest text-orange-300 backdrop-blur-xl mb-5 shadow-sm">
-          <Zap className="h-3.5 w-3.5" />
-          Fast & Cloud Powered Utilities
-        </div>
-
-        <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl leading-[1.1]">
+       
+        <h1 className="text-2xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl leading-[1.1]">
           Media Extractor &{" "}
           <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-rose-400 bg-clip-text text-transparent">
             Downloader Hub.
