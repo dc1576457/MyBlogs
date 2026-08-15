@@ -30,10 +30,9 @@ ensureTempDirectory();
 
 const BROWSER_HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
 
-  "Accept-Language":
-    "en-US,en;q=0.9",
+  "Accept-Language": "en-US,en;q=0.9",
 
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -138,10 +137,11 @@ const extractYouTubeId = (url) => {
   try {
     const parsed = new URL(url);
 
-    if (
-      parsed.hostname === "youtu.be" ||
-      parsed.hostname === "www.youtu.be"
-    ) {
+    const hostname = parsed.hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+
+    if (hostname === "youtu.be") {
       return (
         parsed.pathname
           .replace(/^\/+/, "")
@@ -174,22 +174,19 @@ const cleanFileName = (name) => {
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 80);
+    .slice(0, 100);
 };
 
 /* =========================================================
    QUALITY NORMALIZER
+   ONLY 360 + 720
 ========================================================= */
 
 const normalizeQuality = (quality) => {
-  const number = Number(quality);
+  const value = Number(quality);
 
-  if (number === 360) {
+  if (value === 360) {
     return 360;
-  }
-
-  if (number === 720) {
-    return 720;
   }
 
   return 720;
@@ -218,6 +215,7 @@ const decodeMediaUrl = (value) => {
 
 /* =========================================================
    PINTEREST ENGINE
+   DO NOT CHANGE
 ========================================================= */
 
 const scrapePinterest = async (url) => {
@@ -396,213 +394,214 @@ const scrapePinterest = async (url) => {
 
 /* =========================================================
    INSTAGRAM ENGINE
+   NEW PUBLIC MEDIA ENGINE
+========================================================= */
+
+const getInstagramType = (url) => {
+  const pathname = new URL(url).pathname.toLowerCase();
+
+  if (pathname.startsWith("/reel/")) {
+    return "reel";
+  }
+
+  if (pathname.startsWith("/reels/")) {
+    return "reel";
+  }
+
+  if (pathname.startsWith("/p/")) {
+    return "post";
+  }
+
+  if (pathname.startsWith("/tv/")) {
+    return "video";
+  }
+
+  return "unknown";
+};
+
+/* =========================================================
+   RUN YT-DLP JSON
+========================================================= */
+
+const runYtDlpJson = async (url) => {
+  const result = await youtubedl(url, {
+    dumpSingleJson: true,
+    noDownload: true,
+    noPlaylist: true,
+    noWarnings: true,
+    noCheckCertificates: true,
+    skipDownload: true,
+    quiet: true,
+    retries: 2,
+    fragmentRetries: 2,
+  });
+
+  return result;
+};
+
+/* =========================================================
+   GET BEST INSTAGRAM FORMAT
+========================================================= */
+
+const buildInstagramFormats = (data) => {
+  const formats = Array.isArray(data?.formats)
+    ? data.formats
+    : [];
+
+  const result = [];
+
+  const videoFormats = formats
+    .filter((format) => {
+      const height = Number(format?.height);
+
+      return (
+        format?.url &&
+        Number.isFinite(height) &&
+        height > 0 &&
+        (
+          format?.vcodec !== "none" ||
+          format?.ext === "mp4"
+        )
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(a.height || 0) -
+        Number(b.height || 0)
+    );
+
+  const addBestAtOrBelow = (target) => {
+    const candidates = videoFormats.filter(
+      (format) =>
+        Number(format.height) <= target
+    );
+
+    if (!candidates.length) {
+      return;
+    }
+
+    const selected =
+      candidates[candidates.length - 1];
+
+    result.push({
+      formatId:
+        selected.format_id ||
+        `instagram-${target}`,
+
+      quality:
+        `${Number(selected.height)}p`,
+
+      height:
+        Number(selected.height),
+
+      directUrl:
+        selected.url,
+    });
+  };
+
+  addBestAtOrBelow(360);
+  addBestAtOrBelow(720);
+
+  /* Remove duplicate heights */
+
+  return result.filter(
+    (format, index, array) =>
+      array.findIndex(
+        (item) =>
+          Number(item.height) ===
+          Number(format.height)
+      ) === index
+  );
+};
+
+/* =========================================================
+   INSTAGRAM PUBLIC EXTRACT
 ========================================================= */
 
 const scrapeInstagram = async (url) => {
   try {
-    const cleanUrl = url
-      .split("?")[0]
-      .replace(/\/+$/, "");
+    const type = getInstagramType(url);
 
-    let oembedData = null;
-
-    /* =====================================================
-       OEMBED
-    ===================================================== */
-
-    try {
-      const oembedRes =
-        await axios.get(
-          `https://api.instagram.com/oembed/?url=${encodeURIComponent(
-            cleanUrl
-          )}`,
-          {
-            headers: BROWSER_HEADERS,
-            timeout: 10000,
-          }
-        );
-
-      oembedData =
-        oembedRes.data;
-    } catch {
-      // Continue
-    }
-
-    /* =====================================================
-       PAGE
-    ===================================================== */
-
-    let html = "";
-
-    try {
-      const response =
-        await axios.get(
-          `${cleanUrl}/embed/captioned/`,
-          {
-            headers: BROWSER_HEADERS,
-            timeout: 15000,
-            maxRedirects: 5,
-          }
-        );
-
-      html = response.data;
-    } catch {
-      try {
-        const response =
-          await axios.get(
-            cleanUrl,
-            {
-              headers:
-                BROWSER_HEADERS,
-              timeout: 15000,
-              maxRedirects: 5,
-            }
-          );
-
-        html = response.data;
-      } catch {
-        return null;
-      }
-    }
-
-    const $ = cheerio.load(html);
-
-    let videoUrl = null;
-
-    let imageUrl =
-      oembedData?.thumbnail_url ||
-      $('meta[property="og:image"]').attr(
-        "content"
-      ) ||
-      null;
-
-    let title =
-      oembedData?.title ||
-      $('meta[property="og:title"]').attr(
-        "content"
-      ) ||
-      "Instagram Media";
-
-    /* =====================================================
-       VIDEO TAG
-    ===================================================== */
-
-    const videoTag =
-      $("video").attr("src");
+    /*
+     * We intentionally allow public:
+     *
+     * /p/
+     * /reel/
+     * /reels/
+     * /tv/
+     *
+     * Private/unavailable media will fail in yt-dlp.
+     */
 
     if (
-      videoTag &&
-      validateUrl(videoTag)
+      !["post", "reel", "video"].includes(type)
     ) {
-      videoUrl = videoTag;
+      return null;
     }
 
-    /* =====================================================
-       VIDEO URL
-    ===================================================== */
+    const data =
+      await runYtDlpJson(url);
 
-    if (!videoUrl) {
-      const patterns = [
-        /"video_url":"([^"]+)"/,
-        /"playable_url":"([^"]+)"/,
-        /"video_versions":\s*\[.*?"url":"([^"]+)"/,
-      ];
-
-      for (const pattern of patterns) {
-        const match =
-          html.match(pattern);
-
-        if (match?.[1]) {
-          const decoded =
-            decodeMediaUrl(
-              match[1]
-            );
-
-          if (
-            decoded &&
-            validateUrl(decoded)
-          ) {
-            videoUrl = decoded;
-            break;
-          }
-        }
-      }
+    if (!data) {
+      return null;
     }
 
-    /* =====================================================
-       IMAGE
-    ===================================================== */
+    const title =
+      cleanFileName(
+        data.title ||
+        data.description ||
+        "Instagram Media"
+      );
 
-    if (!imageUrl) {
-      imageUrl =
-        $("img.EmbeddedMediaImage")
-          .attr("src") ||
-        $('meta[property="og:image"]')
-          .attr("content") ||
-        null;
-    }
+    const thumbnail =
+      data.thumbnail || null;
 
-    if (!imageUrl) {
-      const patterns = [
-        /"display_url":"([^"]+)"/,
-        /"thumbnail_src":"([^"]+)"/,
-      ];
+    const formats =
+      buildInstagramFormats(data);
 
-      for (const pattern of patterns) {
-        const match =
-          html.match(pattern);
+    /*
+     * VIDEO
+     */
 
-        if (match?.[1]) {
-          const decoded =
-            decodeMediaUrl(
-              match[1]
-            );
-
-          if (
-            decoded &&
-            validateUrl(decoded)
-          ) {
-            imageUrl = decoded;
-            break;
-          }
-        }
-      }
-    }
-
-    /* =====================================================
-       VIDEO
-    ===================================================== */
-
-    if (videoUrl) {
+    if (formats.length > 0) {
       return {
-        title: cleanFileName(title),
-        thumbnail: imageUrl,
+        title,
+        thumbnail,
+        uploader:
+          data.uploader ||
+          data.channel ||
+          null,
+
         isPhoto: false,
 
-        formats: [
-          {
-            formatId: "instagram-720",
-            quality: "720p HD",
-            height: 720,
-            directUrl: videoUrl,
-          },
-        ],
+        formats,
       };
     }
 
-    /* =====================================================
-       PHOTO
-    ===================================================== */
+    /*
+     * PHOTO
+     */
+
+    const imageUrl =
+      data.thumbnail ||
+      data.url ||
+      null;
 
     if (
       imageUrl &&
       validateUrl(imageUrl)
     ) {
       return {
-        title: cleanFileName(title),
+        title,
         thumbnail: imageUrl,
         url: imageUrl,
+        uploader:
+          data.uploader ||
+          data.channel ||
+          null,
+
         isPhoto: true,
+
         formats: [],
       };
     }
@@ -610,7 +609,7 @@ const scrapeInstagram = async (url) => {
     return null;
   } catch (error) {
     logger?.warn?.(
-      `Instagram scraper error: ${error.message}`
+      `Instagram yt-dlp error: ${error.message}`
     );
 
     return null;
@@ -619,6 +618,7 @@ const scrapeInstagram = async (url) => {
 
 /* =========================================================
    FACEBOOK ENGINE
+   DO NOT CHANGE
 ========================================================= */
 
 const scrapeFacebook = async (url) => {
@@ -761,6 +761,82 @@ const scrapeFacebook = async (url) => {
 };
 
 /* =========================================================
+   YOUTUBE PUBLIC EXTRACTION
+========================================================= */
+
+const buildYouTubeFormats = (data) => {
+  const formats = Array.isArray(data?.formats)
+    ? data.formats
+    : [];
+
+  const result = [];
+
+  const videoFormats = formats
+    .filter((format) => {
+      const height = Number(format?.height);
+
+      return (
+        format?.url &&
+        Number.isFinite(height) &&
+        height > 0 &&
+        format?.vcodec !== "none"
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(a.height || 0) -
+        Number(b.height || 0)
+    );
+
+  const getFormat = (target) => {
+    const candidates =
+      videoFormats.filter(
+        (format) =>
+          Number(format.height) <= target
+      );
+
+    if (!candidates.length) {
+      return null;
+    }
+
+    return candidates[candidates.length - 1];
+  };
+
+  for (const target of [360, 720]) {
+    const format =
+      getFormat(target);
+
+    if (!format) {
+      continue;
+    }
+
+    result.push({
+      formatId:
+        format.format_id ||
+        `youtube-${target}`,
+
+      quality:
+        `${Number(format.height)}p`,
+
+      height:
+        Number(format.height),
+
+      directUrl:
+        format.url,
+    });
+  }
+
+  return result.filter(
+    (format, index, array) =>
+      array.findIndex(
+        (item) =>
+          Number(item.height) ===
+          Number(format.height)
+      ) === index
+  );
+};
+
+/* =========================================================
    YOUTUBE ENGINE
 ========================================================= */
 
@@ -769,74 +845,80 @@ const scrapeYouTube = async (url) => {
     const videoId =
       extractYouTubeId(url);
 
-    let title =
-      "YouTube Video";
-
-    let thumbnail = null;
-
-    let uploader =
-      "YouTube Creator";
-
-    /* =====================================================
-       OEMBED
-    ===================================================== */
-
-    try {
-      const response =
-        await axios.get(
-          `https://www.youtube.com/oembed?url=${encodeURIComponent(
-            url
-          )}&format=json`,
-          {
-            timeout: 10000,
-          }
-        );
-
-      title =
-        response.data?.title ||
-        title;
-
-      thumbnail =
-        response.data?.thumbnail_url ||
-        thumbnail;
-
-      uploader =
-        response.data?.author_name ||
-        uploader;
-    } catch {
-      if (videoId) {
-        thumbnail =
-          `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      }
+    if (!videoId) {
+      return null;
     }
 
-    /* =====================================================
-       ONLY 360 + 720
-    ===================================================== */
+    /*
+     * IMPORTANT:
+     * Actually inspect the video.
+     *
+     * This prevents the old behaviour where
+     * every YouTube URL was marked successful
+     * even when yt-dlp could not access it.
+     */
 
-    const formats = [
-      {
-        formatId: "360",
-        quality: "360p SD",
-        height: 360,
-      },
-      {
-        formatId: "720",
-        quality: "720p HD",
-        height: 720,
-      },
-    ];
+    const data =
+      await runYtDlpJson(url);
+
+    if (!data) {
+      return null;
+    }
+
+    /*
+     * Private / unavailable / restricted
+     */
+
+    if (
+      data.is_live &&
+      !data.formats?.length
+    ) {
+      return null;
+    }
+
+    const formats =
+      buildYouTubeFormats(data);
+
+    /*
+     * Fallback thumbnail
+     */
+
+    const thumbnail =
+      data.thumbnail ||
+      `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+    /*
+     * If yt-dlp has no usable video format,
+     * extraction should fail.
+     */
+
+    if (!formats.length) {
+      return null;
+    }
 
     return {
-      title: cleanFileName(title),
+      title: cleanFileName(
+        data.title ||
+        "YouTube Video"
+      ),
+
       thumbnail,
-      uploader,
+
+      uploader:
+        data.uploader ||
+        data.channel ||
+        "YouTube Creator",
+
+      duration:
+        Number(data.duration) || 0,
+
       isPhoto: false,
+
       formats,
     };
   } catch (error) {
     logger?.warn?.(
-      `YouTube scraper error: ${error.message}`
+      `YouTube extraction error: ${error.message}`
     );
 
     return null;
@@ -868,8 +950,11 @@ export const extractTool = async (
       });
     }
 
+    const cleanUrl =
+      url.trim();
+
     const platform =
-      getPlatform(url);
+      getPlatform(cleanUrl);
 
     if (
       platform === "unknown"
@@ -907,22 +992,42 @@ export const extractTool = async (
 
     if (platform === "youtube") {
       parsedData =
-        await scrapeYouTube(url);
+        await scrapeYouTube(
+          cleanUrl
+        );
     }
+
+    /*
+     * FACEBOOK UNCHANGED
+     */
 
     if (platform === "facebook") {
       parsedData =
-        await scrapeFacebook(url);
+        await scrapeFacebook(
+          cleanUrl
+        );
     }
+
+    /*
+     * INSTAGRAM NEW PUBLIC ENGINE
+     */
 
     if (platform === "instagram") {
       parsedData =
-        await scrapeInstagram(url);
+        await scrapeInstagram(
+          cleanUrl
+        );
     }
+
+    /*
+     * PINTEREST UNCHANGED
+     */
 
     if (platform === "pinterest") {
       parsedData =
-        await scrapePinterest(url);
+        await scrapePinterest(
+          cleanUrl
+        );
     }
 
     /* =====================================================
@@ -948,9 +1053,10 @@ export const extractTool = async (
 
           url:
             parsedData.url ||
-            url,
+            cleanUrl,
 
-          duration: 0,
+          duration:
+            parsedData.duration || 0,
 
           uploader:
             parsedData.uploader ||
@@ -981,10 +1087,9 @@ export const extractTool = async (
 
     return res.status(422).json({
       success: false,
-
       message:
         `Unable to extract ${platform} media. ` +
-        "The media may be private, unavailable, or protected.",
+        "The media may be private, unavailable, restricted, or protected.",
     });
   } catch (error) {
     logger?.error?.(
@@ -1000,397 +1105,150 @@ export const extractTool = async (
 };
 
 /* =========================================================
-   YOUTUBE DOWNLOAD
-   youtube-dl-exec
+   YOUTUBE / INSTAGRAM YT-DLP DOWNLOAD
 ========================================================= */
 
-const downloadYouTubeWithYtDlp =
-  async ({
-    url,
-    quality,
-    title,
-  }) => {
-    ensureTempDirectory();
+const downloadWithYtDlp = async ({
+  url,
+  quality,
+  title,
+  platform,
+}) => {
+  ensureTempDirectory();
 
-    const id =
-      crypto
-        .randomBytes(12)
-        .toString("hex");
+  const id =
+    crypto
+      .randomBytes(12)
+      .toString("hex");
 
-    const outputPath =
-      path.join(
-        TEMP_DIR,
-        `${id}.mp4`
+  const outputPath =
+    path.join(
+      TEMP_DIR,
+      `${id}.mp4`
+    );
+
+  const normalizedQuality =
+    normalizeQuality(
+      quality
+    );
+
+  /*
+   * 360:
+   * video <=360 + audio
+   *
+   * 720:
+   * video <=720 + audio
+   *
+   * fallback to progressive MP4
+   */
+
+  const format =
+    normalizedQuality === 360
+      ? "bestvideo[height<=360]+bestaudio/best[height<=360]/best[ext=mp4][height<=360]"
+      : "bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4][height<=720]";
+
+  try {
+    await youtubedl(
+      url,
+      {
+        output:
+          outputPath,
+
+        format,
+
+        mergeOutputFormat:
+          "mp4",
+
+        noPlaylist: true,
+
+        noWarnings: true,
+
+        noCheckCertificates:
+          true,
+
+        restrictFilenames:
+          true,
+
+        retries: 3,
+
+        fragmentRetries: 3,
+
+        concurrentFragments: 4,
+
+        quiet: true,
+      }
+    );
+
+    if (
+      !fs.existsSync(
+        outputPath
+      )
+    ) {
+      throw new Error(
+        `${platform} downloader did not create the output file.`
+      );
+    }
+
+    const stats =
+      await fs.promises.stat(
+        outputPath
       );
 
-    const normalizedQuality =
-      normalizeQuality(
-        quality
+    if (!stats.size) {
+      throw new Error(
+        `Downloaded ${platform} file is empty.`
       );
+    }
 
-    /* =====================================================
-       FORMAT
+    return {
+      outputPath,
 
-       360:
-       best video <=360 + best audio
+      size:
+        stats.size,
 
-       720:
-       best video <=720 + best audio
+      quality:
+        normalizedQuality,
 
-       If separate streams are unavailable,
-       fallback to progressive MP4.
-    ===================================================== */
-
-    const format =
-      normalizedQuality === 360
-        ? "bestvideo[height<=360]+bestaudio/best[height<=360]/best[ext=mp4][height<=360]"
-        : "bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4][height<=720]";
-
+      filename:
+        `${cleanFileName(
+          title ||
+            `${platform}-video`
+        )}.mp4`,
+    };
+  } catch (error) {
     try {
-      await youtubedl(
-        url,
-        {
-          output: outputPath,
-
-          format,
-
-          mergeOutputFormat:
-            "mp4",
-
-          noPlaylist: true,
-
-          noWarnings: true,
-
-          noCheckCertificates:
-            true,
-
-          restrictFilenames:
-            true,
-
-          retries: 3,
-
-          fragmentRetries: 3,
-
-          concurrentFragments: 4,
-
-          quiet: true,
-        }
-      );
-
       if (
-        !fs.existsSync(
+        fs.existsSync(
           outputPath
         )
       ) {
-        throw new Error(
-          "youtube-dl-exec did not create the output file."
-        );
-      }
-
-      const stats =
-        await fs.promises.stat(
+        await fs.promises.unlink(
           outputPath
         );
-
-      if (
-        !stats.size
-      ) {
-        throw new Error(
-          "Downloaded YouTube file is empty."
-        );
       }
-
-      return {
-        outputPath,
-
-        size:
-          stats.size,
-
-        quality:
-          normalizedQuality,
-
-        filename:
-          `${cleanFileName(
-            title ||
-              "youtube-video"
-          )}.mp4`,
-      };
-    } catch (error) {
-      try {
-        if (
-          fs.existsSync(
-            outputPath
-          )
-        ) {
-          await fs.promises.unlink(
-            outputPath
-          );
-        }
-      } catch {
-        // Ignore
-      }
-
-      throw error;
+    } catch {
+      // Ignore
     }
-  };
+
+    throw error;
+  }
+};
 
 /* =========================================================
    STREAM LOCAL FILE
 ========================================================= */
 
-const streamLocalFile =
-  async (
-    res,
-    filePath,
-    filename,
-    contentType
-  ) => {
-    try {
-      const stats =
-        await fs.promises.stat(
-          filePath
-        );
-
-      res.status(200);
-
-      res.setHeader(
-        "Content-Type",
-        contentType
+const streamLocalFile = async (
+  res,
+  filePath,
+  filename,
+  contentType
+) => {
+  try {
+    const stats =
+      await fs.promises.stat(
+        filePath
       );
-
-      res.setHeader(
-        "Content-Length",
-        stats.size
-      );
-
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${encodeURIComponent(
-          filename
-        )}"`
-      );
-
-      res.setHeader(
-        "Cache-Control",
-        "no-store"
-      );
-
-      const stream =
-        fs.createReadStream(
-          filePath
-        );
-
-      stream.on(
-        "error",
-        async (error) => {
-          logger?.error?.(
-            `File stream error: ${error.message}`
-          );
-
-          try {
-            if (
-              fs.existsSync(
-                filePath
-              )
-            ) {
-              await fs.promises.unlink(
-                filePath
-              );
-            }
-          } catch {
-            // Ignore
-          }
-
-          if (
-            !res.headersSent
-          ) {
-            res.status(500).json({
-              success: false,
-              message:
-                "Unable to stream downloaded file.",
-            });
-          }
-        }
-      );
-
-      stream.on(
-        "close",
-        async () => {
-          try {
-            if (
-              fs.existsSync(
-                filePath
-              )
-            ) {
-              await fs.promises.unlink(
-                filePath
-              );
-            }
-          } catch {
-            // Ignore
-          }
-        }
-      );
-
-      stream.pipe(res);
-    } catch (error) {
-      try {
-        if (
-          fs.existsSync(
-            filePath
-          )
-        ) {
-          await fs.promises.unlink(
-            filePath
-          );
-        }
-      } catch {
-        // Ignore
-      }
-
-      throw error;
-    }
-  };
-
-/* =========================================================
-   GET CONTENT TYPE
-========================================================= */
-
-const getMediaExtension =
-  (contentType, isPhoto) => {
-    const type =
-      String(
-        contentType || ""
-      ).toLowerCase();
-
-    if (
-      type.includes("png")
-    ) {
-      return ".png";
-    }
-
-    if (
-      type.includes("webp")
-    ) {
-      return ".webp";
-    }
-
-    if (
-      type.includes("gif")
-    ) {
-      return ".gif";
-    }
-
-    if (
-      type.includes("jpeg") ||
-      type.includes("jpg")
-    ) {
-      return ".jpg";
-    }
-
-    if (
-      type.includes("webm")
-    ) {
-      return ".webm";
-    }
-
-    if (
-      type.includes("mkv")
-    ) {
-      return ".mkv";
-    }
-
-    if (
-      type.includes("mpeg")
-    ) {
-      return ".mpeg";
-    }
-
-    return isPhoto
-      ? ".jpg"
-      : ".mp4";
-  };
-
-/* =========================================================
-   DIRECT MEDIA STREAM
-========================================================= */
-
-const streamDirectMedia =
-  async ({
-    res,
-    directUrl,
-    filename,
-    isPhoto = false,
-  }) => {
-    if (
-      !directUrl ||
-      !validateUrl(directUrl)
-    ) {
-      throw new Error(
-        "Direct media URL is invalid."
-      );
-    }
-
-    const response =
-      await axios({
-        method: "GET",
-
-        url: directUrl,
-
-        responseType: "stream",
-
-        timeout: 120000,
-
-        maxRedirects: 5,
-
-        headers:
-          BROWSER_HEADERS,
-
-        validateStatus:
-          (status) =>
-            status >= 200 &&
-            status < 300,
-      });
-
-    const contentType =
-      response.headers[
-        "content-type"
-      ] ||
-      (isPhoto
-        ? "image/jpeg"
-        : "video/mp4");
-
-    /*
-     * IMPORTANT:
-     *
-     * If the server sends HTML instead
-     * of media, DO NOT download it.
-     */
-
-    if (
-      contentType
-        .toLowerCase()
-        .includes("text/html")
-    ) {
-      response.data.destroy();
-
-      throw new Error(
-        "The supplied URL returned a webpage instead of media."
-      );
-    }
-
-    const extension =
-      getMediaExtension(
-        contentType,
-        isPhoto
-      );
-
-    const finalFilename =
-      filename.endsWith(
-        extension
-      )
-        ? filename
-        : `${filename}${extension}`;
 
     res.status(200);
 
@@ -1399,23 +1257,15 @@ const streamDirectMedia =
       contentType
     );
 
-    if (
-      response.headers[
-        "content-length"
-      ]
-    ) {
-      res.setHeader(
-        "Content-Length",
-        response.headers[
-          "content-length"
-        ]
-      );
-    }
+    res.setHeader(
+      "Content-Length",
+      stats.size
+    );
 
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${encodeURIComponent(
-        finalFilename
+        filename
       )}"`
     );
 
@@ -1424,90 +1274,304 @@ const streamDirectMedia =
       "no-store"
     );
 
-    response.data.on(
+    const stream =
+      fs.createReadStream(
+        filePath
+      );
+
+    stream.on(
       "error",
-      (error) => {
+      async (error) => {
         logger?.error?.(
-          `Direct media stream error: ${error.message}`
+          `File stream error: ${error.message}`
         );
+
+        try {
+          if (
+            fs.existsSync(
+              filePath
+            )
+          ) {
+            await fs.promises.unlink(
+              filePath
+            );
+          }
+        } catch {
+          // Ignore
+        }
+
+        if (
+          !res.headersSent
+        ) {
+          res.status(500).json({
+            success: false,
+            message:
+              "Unable to stream downloaded file.",
+          });
+        }
       }
     );
 
-    return response.data.pipe(
-      res
+    stream.on(
+      "close",
+      async () => {
+        try {
+          if (
+            fs.existsSync(
+              filePath
+            )
+          ) {
+            await fs.promises.unlink(
+              filePath
+            );
+          }
+        } catch {
+          // Ignore
+        }
+      }
     );
-  };
+
+    stream.pipe(res);
+  } catch (error) {
+    try {
+      if (
+        fs.existsSync(
+          filePath
+        )
+      ) {
+        await fs.promises.unlink(
+          filePath
+        );
+      }
+    } catch {
+      // Ignore
+    }
+
+    throw error;
+  }
+};
 
 /* =========================================================
-   GET DIRECT FORMAT
+   MEDIA EXTENSION
 ========================================================= */
 
-const getSelectedFormat =
-  (
-    formats = [],
-    quality
-  ) => {
-    const normalized =
-      normalizeQuality(
-        quality
+const getMediaExtension = (
+  contentType,
+  isPhoto
+) => {
+  const type =
+    String(
+      contentType || ""
+    ).toLowerCase();
+
+  if (type.includes("png")) {
+    return ".png";
+  }
+
+  if (type.includes("webp")) {
+    return ".webp";
+  }
+
+  if (type.includes("gif")) {
+    return ".gif";
+  }
+
+  if (
+    type.includes("jpeg") ||
+    type.includes("jpg")
+  ) {
+    return ".jpg";
+  }
+
+  if (type.includes("webm")) {
+    return ".webm";
+  }
+
+  if (type.includes("mkv")) {
+    return ".mkv";
+  }
+
+  return isPhoto
+    ? ".jpg"
+    : ".mp4";
+};
+
+/* =========================================================
+   DIRECT MEDIA STREAM
+========================================================= */
+
+const streamDirectMedia = async ({
+  res,
+  directUrl,
+  filename,
+  isPhoto = false,
+}) => {
+  if (
+    !directUrl ||
+    !validateUrl(directUrl)
+  ) {
+    throw new Error(
+      "Direct media URL is invalid."
+    );
+  }
+
+  const response =
+    await axios({
+      method: "GET",
+
+      url: directUrl,
+
+      responseType: "stream",
+
+      timeout: 120000,
+
+      maxRedirects: 5,
+
+      headers:
+        BROWSER_HEADERS,
+
+      validateStatus:
+        (status) =>
+          status >= 200 &&
+          status < 300,
+    });
+
+  const contentType =
+    response.headers[
+      "content-type"
+    ] ||
+    (isPhoto
+      ? "image/jpeg"
+      : "video/mp4");
+
+  /*
+   * NEVER DOWNLOAD HTML
+   */
+
+  if (
+    contentType
+      .toLowerCase()
+      .includes("text/html")
+  ) {
+    response.data.destroy();
+
+    throw new Error(
+      "The supplied URL returned a webpage instead of media."
+    );
+  }
+
+  const extension =
+    getMediaExtension(
+      contentType,
+      isPhoto
+    );
+
+  const finalFilename =
+    filename.endsWith(
+      extension
+    )
+      ? filename
+      : `${filename}${extension}`;
+
+  res.status(200);
+
+  res.setHeader(
+    "Content-Type",
+    contentType
+  );
+
+  if (
+    response.headers[
+      "content-length"
+    ]
+  ) {
+    res.setHeader(
+      "Content-Length",
+      response.headers[
+        "content-length"
+      ]
+    );
+  }
+
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${encodeURIComponent(
+      finalFilename
+    )}"`
+  );
+
+  res.setHeader(
+    "Cache-Control",
+    "no-store"
+  );
+
+  response.data.on(
+    "error",
+    (error) => {
+      logger?.error?.(
+        `Direct media stream error: ${error.message}`
       );
+    }
+  );
 
-    /*
-     * First exact quality
-     */
+  return response.data.pipe(
+    res
+  );
+};
 
-    const exact =
-      formats.find(
+/* =========================================================
+   SELECT FORMAT
+========================================================= */
+
+const getSelectedFormat = (
+  formats = [],
+  quality
+) => {
+  const normalized =
+    normalizeQuality(
+      quality
+    );
+
+  const validFormats =
+    formats.filter(
+      (format) =>
+        validateUrl(
+          format?.directUrl
+        )
+    );
+
+  const exact =
+    validFormats.find(
+      (format) =>
+        Number(
+          format.height
+        ) === normalized
+    );
+
+  if (exact) {
+    return exact;
+  }
+
+  const lower =
+    validFormats
+      .filter(
         (format) =>
           Number(
             format.height
-          ) === normalized &&
-          validateUrl(
-            format.directUrl
-          )
+          ) <= normalized
+      )
+      .sort(
+        (a, b) =>
+          Number(b.height) -
+          Number(a.height)
       );
 
-    if (exact) {
-      return exact;
-    }
+  if (lower.length) {
+    return lower[0];
+  }
 
-    /*
-     * For 720 request,
-     * use highest available <=720.
-     */
-
-    const lower =
-      formats
-        .filter(
-          (format) =>
-            Number(
-              format.height
-            ) <= normalized &&
-            validateUrl(
-              format.directUrl
-            )
-        )
-        .sort(
-          (a, b) =>
-            Number(b.height) -
-            Number(a.height)
-        );
-
-    if (lower.length) {
-      return lower[0];
-    }
-
-    /*
-     * Last valid format
-     */
-
-    return formats.find(
-      (format) =>
-        validateUrl(
-          format.directUrl
-        )
-    );
-  };
+  return validFormats[0];
+};
 
 /* =========================================================
    DOWNLOAD CONTROLLER
@@ -1533,13 +1597,11 @@ export const downloadTool =
           ? url.trim()
           : "";
 
-      /* =====================================================
-         VALIDATE SOURCE URL
-      ===================================================== */
-
       if (
         !sourceUrl ||
-        !validateUrl(sourceUrl)
+        !validateUrl(
+          sourceUrl
+        )
       ) {
         return res.status(400).json({
           success: false,
@@ -1576,7 +1638,6 @@ export const downloadTool =
 
       /* =====================================================
          YOUTUBE
-         ALWAYS USE youtube-dl-exec
       ===================================================== */
 
       if (
@@ -1584,17 +1645,18 @@ export const downloadTool =
       ) {
         try {
           const result =
-            await downloadYouTubeWithYtDlp(
-              {
-                url: sourceUrl,
+            await downloadWithYtDlp({
+              url: sourceUrl,
 
-                quality:
-                  normalizedQuality,
+              quality:
+                normalizedQuality,
 
-                title:
-                  cleanTitle,
-              }
-            );
+              title:
+                cleanTitle,
+
+              platform:
+                "YouTube",
+            });
 
           return await streamLocalFile(
             res,
@@ -1607,7 +1669,7 @@ export const downloadTool =
           );
         } catch (error) {
           logger?.error?.(
-            `YouTube youtube-dl-exec error: ${error.message}`
+            `YouTube download error: ${error.message}`
           );
 
           return res.status(422).json({
@@ -1615,33 +1677,179 @@ export const downloadTool =
 
             message:
               "YouTube video could not be downloaded. Please make sure the video is public and try again.",
-
-            error:
-              process.env.NODE_ENV ===
-              "development"
-                ? error.message
-                : undefined,
           });
         }
       }
 
       /* =====================================================
-         NON-YOUTUBE MEDIA
+         INSTAGRAM
+         USE YT-DLP FOR PUBLIC MEDIA
       ===================================================== */
 
-      /*
-       * IMPORTANT:
-       *
-       * Do NOT download sourceUrl directly.
-       *
-       * sourceUrl is usually a webpage:
-       *
-       * https://facebook.com/...
-       * https://instagram.com/...
-       * https://pinterest.com/...
-       *
-       * We only download directUrl.
-       */
+      if (
+        platform === "instagram"
+      ) {
+        try {
+          /*
+           * First attempt the direct format
+           * received from extraction.
+           */
+
+          if (
+            directUrl &&
+            validateUrl(
+              directUrl
+            )
+          ) {
+            try {
+              return await streamDirectMedia({
+                res,
+
+                directUrl,
+
+                filename:
+                  cleanTitle,
+
+                isPhoto:
+                  Boolean(
+                    isPhoto
+                  ),
+              });
+            } catch (error) {
+              logger?.warn?.(
+                `Instagram direct URL failed: ${error.message}`
+              );
+            }
+          }
+
+          /*
+           * If direct URL expired/failed,
+           * extract and download again.
+           */
+
+          const mediaData =
+            await scrapeInstagram(
+              sourceUrl
+            );
+
+          if (!mediaData) {
+            return res.status(422).json({
+              success: false,
+              message:
+                "Instagram media could not be accessed. The post may be private, unavailable, or protected.",
+            });
+          }
+
+          /*
+           * PHOTO
+           */
+
+          if (
+            mediaData.isPhoto
+          ) {
+            const photoUrl =
+              mediaData.url ||
+              mediaData.thumbnail;
+
+            if (
+              photoUrl &&
+              validateUrl(
+                photoUrl
+              )
+            ) {
+              return await streamDirectMedia({
+                res,
+
+                directUrl:
+                  photoUrl,
+
+                filename:
+                  cleanTitle,
+
+                isPhoto: true,
+              });
+            }
+          }
+
+          /*
+           * VIDEO
+           */
+
+          const selected =
+            getSelectedFormat(
+              mediaData.formats ||
+                [],
+              normalizedQuality
+            );
+
+          if (
+            selected?.directUrl &&
+            validateUrl(
+              selected.directUrl
+            )
+          ) {
+            try {
+              return await streamDirectMedia({
+                res,
+
+                directUrl:
+                  selected.directUrl,
+
+                filename:
+                  cleanTitle,
+
+                isPhoto: false,
+              });
+            } catch {
+              // Fallback to yt-dlp
+            }
+          }
+
+          /*
+           * Final fallback
+           */
+
+          const result =
+            await downloadWithYtDlp({
+              url: sourceUrl,
+
+              quality:
+                normalizedQuality,
+
+              title:
+                cleanTitle,
+
+              platform:
+                "Instagram",
+            });
+
+          return await streamLocalFile(
+            res,
+
+            result.outputPath,
+
+            result.filename,
+
+            "video/mp4"
+          );
+        } catch (error) {
+          logger?.error?.(
+            `Instagram download error: ${error.message}`
+          );
+
+          return res.status(422).json({
+            success: false,
+
+            message:
+              "Instagram media could not be downloaded. Make sure the post is public and try again.",
+          });
+        }
+      }
+
+      /* =====================================================
+         FACEBOOK
+         EXISTING FLOW
+      ===================================================== */
 
       let selectedDirectUrl =
         directUrl;
@@ -1649,9 +1857,9 @@ export const downloadTool =
       let selectedIsPhoto =
         Boolean(isPhoto);
 
-      /* =====================================================
-         USE DIRECT URL FROM FRONTEND
-      ===================================================== */
+      /*
+       * Frontend direct URL
+       */
 
       if (
         selectedDirectUrl &&
@@ -1660,20 +1868,18 @@ export const downloadTool =
         )
       ) {
         try {
-          return await streamDirectMedia(
-            {
-              res,
+          return await streamDirectMedia({
+            res,
 
-              directUrl:
-                selectedDirectUrl,
+            directUrl:
+              selectedDirectUrl,
 
-              filename:
-                cleanTitle,
+            filename:
+              cleanTitle,
 
-              isPhoto:
-                selectedIsPhoto,
-            }
-          );
+            isPhoto:
+              selectedIsPhoto,
+          });
         } catch (error) {
           logger?.warn?.(
             `Frontend direct media failed: ${error.message}`
@@ -1682,7 +1888,7 @@ export const downloadTool =
       }
 
       /* =====================================================
-         RE-EXTRACT PLATFORM
+         RE-EXTRACT
       ===================================================== */
 
       let mediaData = null;
@@ -1697,15 +1903,6 @@ export const downloadTool =
       }
 
       if (
-        platform === "instagram"
-      ) {
-        mediaData =
-          await scrapeInstagram(
-            sourceUrl
-          );
-      }
-
-      if (
         platform === "pinterest"
       ) {
         mediaData =
@@ -1713,10 +1910,6 @@ export const downloadTool =
             sourceUrl
           );
       }
-
-      /* =====================================================
-         NO MEDIA FOUND
-      ===================================================== */
 
       if (!mediaData) {
         return res.status(422).json({
@@ -1745,19 +1938,17 @@ export const downloadTool =
         )
       ) {
         try {
-          return await streamDirectMedia(
-            {
-              res,
+          return await streamDirectMedia({
+            res,
 
-              directUrl:
-                mediaData.url,
+            directUrl:
+              mediaData.url,
 
-              filename:
-                cleanTitle,
+            filename:
+              cleanTitle,
 
-              isPhoto: true,
-            }
-          );
+            isPhoto: true,
+          });
         } catch (error) {
           logger?.error?.(
             `Photo download error: ${error.message}`
@@ -1772,10 +1963,6 @@ export const downloadTool =
       let selectedFormat =
         null;
 
-      /*
-       * Prefer formats sent by frontend.
-       */
-
       if (
         Array.isArray(
           formats
@@ -1789,10 +1976,6 @@ export const downloadTool =
           );
       }
 
-      /*
-       * Otherwise use newly extracted formats.
-       */
-
       if (
         !selectedFormat
       ) {
@@ -1804,10 +1987,6 @@ export const downloadTool =
           );
       }
 
-      /* =====================================================
-         DIRECT VIDEO URL
-      ===================================================== */
-
       if (
         selectedFormat?.directUrl &&
         validateUrl(
@@ -1815,29 +1994,23 @@ export const downloadTool =
         )
       ) {
         try {
-          return await streamDirectMedia(
-            {
-              res,
+          return await streamDirectMedia({
+            res,
 
-              directUrl:
-                selectedFormat.directUrl,
+            directUrl:
+              selectedFormat.directUrl,
 
-              filename:
-                cleanTitle,
+            filename:
+              cleanTitle,
 
-              isPhoto: false,
-            }
-          );
+            isPhoto: false,
+          });
         } catch (error) {
           logger?.error?.(
             `${platform} video download error: ${error.message}`
           );
         }
       }
-
-      /* =====================================================
-         NEVER DOWNLOAD WEB PAGE
-      ===================================================== */
 
       return res.status(422).json({
         success: false,
