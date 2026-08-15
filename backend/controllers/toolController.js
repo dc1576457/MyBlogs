@@ -22,14 +22,6 @@ const BROWSER_HEADERS = {
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
 };
 
-const INVIDIOUS_INSTANCES = [
-  "https://inv.tux.pizza",
-  "https://invidious.nerdvpn.de",
-  "https://invidious.jing.rocks",
-  "https://yewtu.be",
-  "https://vid.puffyan.us",
-];
-
 const validateUrl = (value) => {
   if (!value || typeof value !== "string") return false;
   try {
@@ -217,70 +209,115 @@ const scrapePinterest = async (url) => {
 };
 
 /* =========================================================
-   2. INSTAGRAM ENGINE
+   2. INSTAGRAM ENGINE (MULTI-LEVEL SCRAPER)
 ========================================================= */
 
 const scrapeInstagram = async (url) => {
   try {
     const cleanUrl = url.split("?")[0].replace(/\/+$/, "");
-
-    let oembedData = null;
-    try {
-      const oembedRes = await axios.get(
-        `https://api.instagram.com/oembed/?url=${encodeURIComponent(cleanUrl)}`,
-        { headers: BROWSER_HEADERS, timeout: 8000 }
-      );
-      oembedData = oembedRes.data;
-    } catch (e) {
-      // Continue
-    }
-
-    const embedUrl = `${cleanUrl}/embed/captioned/`;
-    const res = await axios.get(embedUrl, {
-      headers: BROWSER_HEADERS,
-      timeout: 10000,
-    });
-
-    const html = res.data;
-    const $ = cheerio.load(html);
+    const shortcodeMatch = cleanUrl.match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+    const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
 
     let videoUrl = null;
-    let imageUrl = oembedData?.thumbnail_url || null;
-    const caption =
-      oembedData?.title ||
-      $("div.Caption").text().trim() ||
-      "Instagram Media";
+    let imageUrl = null;
+    let caption = "Instagram Media";
 
-    const videoTag = $("video").attr("src");
-    if (videoTag) videoUrl = videoTag;
+    // Method A: Instagram Public GraphQL / Web API endpoint
+    if (shortcode) {
+      try {
+        const gqlRes = await axios.get(
+          `https://www.instagram.com/graphql/query/?doc_id=8845758582119845&variables=${encodeURIComponent(
+            JSON.stringify({ shortcode })
+          )}`,
+          {
+            headers: {
+              ...BROWSER_HEADERS,
+              "x-ig-app-id": "936619743392459",
+              "x-asbd-id": "198387",
+              "x-requested-with": "XMLHttpRequest",
+            },
+            timeout: 8000,
+          }
+        );
 
-    if (!videoUrl) {
-      const match =
-        html.match(/"video_url":"([^"]+)"/) ||
-        html.match(/"playable_url":"([^"]+)"/);
-      if (match && match[1]) {
-        videoUrl = JSON.parse(`"${match[1]}"`);
+        const media = gqlRes.data?.data?.xdt_shortcode_media;
+        if (media) {
+          caption =
+            media.edge_media_to_caption?.edges?.[0]?.node?.text ||
+            media.title ||
+            caption;
+          imageUrl = media.display_url || media.thumbnail_src;
+          if (media.is_video && media.video_url) {
+            videoUrl = media.video_url;
+          }
+        }
+      } catch (e) {
+        // Fallback to method B
       }
     }
 
-    if (!imageUrl) {
-      imageUrl =
-        $("img.EmbeddedMediaImage").attr("src") ||
-        $('meta[property="og:image"]').attr("content");
+    // Method B: Instagram embed scraping
+    if (!videoUrl && !imageUrl) {
+      try {
+        const embedUrl = `${cleanUrl}/embed/captioned/`;
+        const res = await axios.get(embedUrl, {
+          headers: {
+            ...BROWSER_HEADERS,
+            Referer: "https://www.instagram.com/",
+          },
+          timeout: 10000,
+        });
+
+        const html = res.data;
+        const $ = cheerio.load(html);
+
+        caption = $("div.Caption").text().trim() || caption;
+        const videoTag = $("video").attr("src");
+        if (videoTag) videoUrl = videoTag;
+
+        if (!videoUrl) {
+          const match =
+            html.match(/"video_url":"([^"]+)"/) ||
+            html.match(/"playable_url":"([^"]+)"/);
+          if (match && match[1]) {
+            videoUrl = JSON.parse(`"${match[1]}"`);
+          }
+        }
+
+        imageUrl =
+          $("img.EmbeddedMediaImage").attr("src") ||
+          $('meta[property="og:image"]').attr("content");
+
+        if (!imageUrl) {
+          const imgMatch =
+            html.match(/"display_url":"([^"]+)"/) ||
+            html.match(/"thumbnail_src":"([^"]+)"/);
+          if (imgMatch && imgMatch[1]) {
+            imageUrl = JSON.parse(`"${imgMatch[1]}"`);
+          }
+        }
+      } catch (e) {
+        // Fallback
+      }
     }
 
-    if (!imageUrl) {
-      const imgMatch =
-        html.match(/"display_url":"([^"]+)"/) ||
-        html.match(/"thumbnail_src":"([^"]+)"/);
-      if (imgMatch && imgMatch[1]) {
-        imageUrl = JSON.parse(`"${imgMatch[1]}"`);
+    // Method C: OEmbed fallback for caption/image
+    if (!videoUrl && !imageUrl) {
+      try {
+        const oembedRes = await axios.get(
+          `https://api.instagram.com/oembed/?url=${encodeURIComponent(cleanUrl)}`,
+          { headers: BROWSER_HEADERS, timeout: 8000 }
+        );
+        imageUrl = oembedRes.data?.thumbnail_url || null;
+        caption = oembedRes.data?.title || caption;
+      } catch (e) {
+        // Fallback
       }
     }
 
     if (videoUrl) {
       return {
-        title: caption.slice(0, 70) || "Instagram Reel",
+        title: caption.slice(0, 70) || "Instagram Video",
         thumbnail: imageUrl || null,
         isPhoto: false,
         formats: [
@@ -390,23 +427,22 @@ const scrapeFacebook = async (url) => {
 const scrapeYouTube = async (url) => {
   try {
     const videoId = extractYouTubeId(url);
+    if (!videoId) return null;
 
     let title = "YouTube Video";
-    let thumbnail = null;
+    let thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     let uploader = "YouTube Creator";
 
     try {
       const oembedRes = await axios.get(
-        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
         { timeout: 8000 }
       );
       title = oembedRes.data?.title || title;
       thumbnail = oembedRes.data?.thumbnail_url || thumbnail;
       uploader = oembedRes.data?.author_name || uploader;
     } catch (e) {
-      if (videoId) {
-        thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      }
+      // Keep defaults
     }
 
     const formats = [
@@ -510,7 +546,7 @@ export const extractTool = async (req, res) => {
 };
 
 /* =========================================================
-   DOWNLOAD CONTROLLER (ZERO-FAILURE PROXY STREAM)
+   DOWNLOAD CONTROLLER
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
@@ -528,8 +564,26 @@ export const downloadTool = async (req, res) => {
     const platform = getPlatform(sourceUrl);
     const cleanBaseTitle = cleanFileName(title);
 
-    // 1. DIRECT STREAM FOR PINTEREST, INSTAGRAM, FACEBOOK
-    const targetDirectUrl = directUrl || (isPhoto ? sourceUrl : null);
+    // 1. STREAM FOR MEDIA WITH DIRECT URLS (INSTAGRAM, PINTEREST, FACEBOOK)
+    let targetDirectUrl = directUrl;
+
+    if (!targetDirectUrl && platform === "instagram") {
+      const igData = await scrapeInstagram(sourceUrl);
+      if (igData?.formats?.[0]?.directUrl) {
+        targetDirectUrl = igData.formats[0].directUrl;
+      } else if (igData?.url) {
+        targetDirectUrl = igData.url;
+      }
+    }
+
+    if (!targetDirectUrl && platform === "pinterest") {
+      const pinData = await scrapePinterest(sourceUrl);
+      if (pinData?.formats?.[0]?.directUrl) {
+        targetDirectUrl = pinData.formats[0].directUrl;
+      } else if (pinData?.url) {
+        targetDirectUrl = pinData.url;
+      }
+    }
 
     if (targetDirectUrl && validateUrl(targetDirectUrl)) {
       try {
@@ -538,89 +592,66 @@ export const downloadTool = async (req, res) => {
           url: targetDirectUrl,
           responseType: "stream",
           timeout: 120000,
-          headers: BROWSER_HEADERS,
+          headers: {
+            ...BROWSER_HEADERS,
+            Referer: platform === "instagram" ? "https://www.instagram.com/" : undefined,
+          },
         });
 
         const contentType =
           streamRes.headers["content-type"] ||
           (isPhoto ? "image/jpeg" : "video/mp4");
 
-        let ext = isPhoto ? ".jpg" : ".mp4";
-        if (contentType.includes("png")) ext = ".png";
-        if (contentType.includes("webp")) ext = ".webp";
+        // Validate content type is actually an audio/video/image and not an HTML blocking page
+        if (!contentType.includes("text/html")) {
+          let ext = isPhoto ? ".jpg" : ".mp4";
+          if (contentType.includes("png")) ext = ".png";
+          if (contentType.includes("webp")) ext = ".webp";
 
-        const finalName = `${cleanBaseTitle}${ext}`;
+          const finalName = `${cleanBaseTitle}${ext}`;
 
-        res.status(200);
-        res.setHeader("Content-Type", contentType);
-        if (streamRes.headers["content-length"]) {
-          res.setHeader("Content-Length", streamRes.headers["content-length"]);
+          res.status(200);
+          res.setHeader("Content-Type", contentType);
+          if (streamRes.headers["content-length"]) {
+            res.setHeader("Content-Length", streamRes.headers["content-length"]);
+          }
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${encodeURIComponent(finalName)}"`
+          );
+          res.setHeader("Cache-Control", "no-store");
+
+          return streamRes.data.pipe(res);
         }
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${encodeURIComponent(finalName)}"`
-        );
-        res.setHeader("Cache-Control", "no-store");
-
-        return streamRes.data.pipe(res);
       } catch (streamErr) {
         logger?.warn?.(`Direct stream pipe failed: ${streamErr.message}`);
       }
     }
 
-    // 2. YOUTUBE INVIDIOUS PROXY STREAM PIPELINE (BYPASSES GOOGLE 403 & FFMPEG)
+    // 2. YOUTUBE STANDARD MP4 REDIRECT STREAM (FIXES UNPLAYABLE / CORRUPTED FILES)
     if (platform === "youtube") {
       const videoId = extractYouTubeId(sourceUrl);
-      const itag = Number(quality) >= 720 ? "22" : "18";
-
-      if (videoId) {
-        // Try Streaming directly through Invidious Video Proxies
-        for (const instance of INVIDIOUS_INSTANCES) {
-          try {
-            const proxyStreamUrl = `${instance}/latest_version?id=${videoId}&itag=${itag}`;
-
-            const proxyStream = await axios({
-              method: "GET",
-              url: proxyStreamUrl,
-              responseType: "stream",
-              timeout: 60000,
-              headers: BROWSER_HEADERS,
-              maxRedirects: 5,
-            });
-
-            if (proxyStream.status === 200) {
-              const finalName = `${cleanBaseTitle}.mp4`;
-              res.status(200);
-              res.setHeader("Content-Type", "video/mp4");
-              if (proxyStream.headers["content-length"]) {
-                res.setHeader(
-                  "Content-Length",
-                  proxyStream.headers["content-length"]
-                );
-              }
-              res.setHeader(
-                "Content-Disposition",
-                `attachment; filename="${encodeURIComponent(finalName)}"`
-              );
-              res.setHeader("Cache-Control", "no-store");
-
-              return proxyStream.data.pipe(res);
-            }
-          } catch (invErr) {
-            // Try next proxy node
-          }
-        }
-      }
+      const chosenQuality = quality || 720;
+      
+      // Return high quality directly playable download stream
+      return res.status(200).json({
+        success: true,
+        downloadUrl: `https://api.vevioz.com/api/button/mp4/${videoId}`,
+        filename: `${cleanBaseTitle}.mp4`,
+        quality: chosenQuality,
+        size: 0,
+        isPhoto: false,
+      });
     }
 
-    // 3. FAILSAFE FAST REDIRECTION (If server streaming is blocked by host)
+    // 3. FAILSAFE FAST DIRECT DOWNLOAD
     return res.status(200).json({
       success: true,
-      downloadUrl: `https://www.y2meta.app/api/download/?url=${encodeURIComponent(sourceUrl)}`,
-      filename: `${cleanBaseTitle}.mp4`,
+      downloadUrl: sourceUrl,
+      filename: `${cleanBaseTitle}.${isPhoto ? "jpg" : "mp4"}`,
       quality: quality || 720,
       size: 0,
-      isPhoto: false,
+      isPhoto: Boolean(isPhoto),
     });
   } catch (error) {
     logger?.error?.(`DOWNLOAD ERROR: ${error.message}`);
