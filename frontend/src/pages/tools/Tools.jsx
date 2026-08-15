@@ -1,5 +1,27 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import {
+  AlertCircle,
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardPaste,
+  Copy,
+  Download,
+  ExternalLink,
+  Film,
+  Image as ImageIcon,
+  Layers,
+  Play,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  X,
+  Zap,
+} from "lucide-react";
 
 /* =========================================================
    API CONFIG
@@ -14,9 +36,35 @@ const API_BASE_URL = RAW_API_URL.replace(/^http:\/\//i, "https://").replace(
 );
 
 /* =========================================================
+   PLATFORM ICONS (Crisp SVGs)
+========================================================= */
+
+const YoutubeIcon = () => (
+  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.5 12 3.5 12 3.5s-7.505 0-9.377.55a3.016 3.016 0 0 0-2.122 2.136C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.55 9.376.55 9.376.55s7.505 0 9.377-.55a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+  </svg>
+);
+
+const FacebookIcon = () => (
+  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+  </svg>
+);
+
+const InstagramIcon = () => (
+  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+  </svg>
+);
+
+const PinterestIcon = () => (
+  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+    <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z" />
+  </svg>
+);
+
+/* =========================================================
    TOOLS DATA
-   YouTube & Instagram are Coming Soon.
-   Facebook & Pinterest downloader sections remain unchanged.
 ========================================================= */
 
 const toolsData = [
@@ -25,10 +73,12 @@ const toolsData = [
     name: "YouTube Video Downloader",
     slug: "youtube-video-downloader",
     description:
-      "Extract available video qualities and download public YouTube videos fast.",
+      "Extract available video qualities and save public YouTube content with audio.",
     category: "YouTube",
-    icon: "▶",
-    gradient: "from-red-500 via-rose-500 to-pink-600",
+    icon: YoutubeIcon,
+    accentGlow: "from-red-500/20 via-rose-500/10 to-transparent",
+    accentBorder: "group-hover:border-red-500/40",
+    gradient: "from-red-500 via-rose-500 to-red-600",
     badgeColor: "bg-red-500/10 text-red-400 border-red-500/20",
     comingSoon: true,
   },
@@ -36,10 +86,13 @@ const toolsData = [
     id: 2,
     name: "Facebook Video Downloader",
     slug: "facebook-video-downloader",
-    description: "Download publicly accessible Facebook videos in HD and SD.",
+    description:
+      "Download publicly accessible Facebook videos in high definition (HD & SD).",
     category: "Facebook",
-    icon: "f",
-    gradient: "from-blue-500 via-indigo-500 to-cyan-500",
+    icon: FacebookIcon,
+    accentGlow: "from-blue-500/20 via-indigo-500/10 to-transparent",
+    accentBorder: "group-hover:border-blue-500/40",
+    gradient: "from-blue-600 via-indigo-600 to-cyan-500",
     badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
     comingSoon: false,
   },
@@ -48,40 +101,38 @@ const toolsData = [
     name: "Instagram Downloader",
     slug: "instagram-video-downloader",
     description:
-      "Download publicly accessible Instagram Reels, videos, and photos.",
+      "Save Instagram Reels, public video posts, and stories in original quality.",
     category: "Instagram",
-    icon: "◎",
-    gradient: "from-fuchsia-500 via-pink-500 to-orange-400",
-    badgeColor: "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20",
+    icon: InstagramIcon,
+    accentGlow: "from-pink-500/20 via-fuchsia-500/10 to-transparent",
+    accentBorder: "group-hover:border-pink-500/40",
+    gradient: "from-pink-500 via-fuchsia-600 to-amber-500",
+    badgeColor: "bg-pink-500/10 text-pink-400 border-pink-500/20",
     comingSoon: true,
   },
   {
     id: 4,
-    name: "Pinterest Video & Photo Downloader",
+    name: "Pinterest Media Downloader",
     slug: "pinterest-downloader",
     description:
-      "Download public Pinterest videos and high-resolution photos instantly.",
+      "Download Pinterest videos, GIF pins, and original full-resolution photos instantly.",
     category: "Pinterest",
-    icon: "P",
+    icon: PinterestIcon,
+    accentGlow: "from-rose-500/20 via-red-500/10 to-transparent",
+    accentBorder: "group-hover:border-rose-500/40",
     gradient: "from-red-600 via-rose-600 to-red-500",
     badgeColor: "bg-red-600/10 text-red-400 border-red-600/20",
     comingSoon: false,
   },
 ];
 
-const categories = [
-  "All",
-  "YouTube",
-  "Facebook",
-  "Instagram",
-  "Pinterest",
-];
+const categories = ["All", "YouTube", "Facebook", "Instagram", "Pinterest"];
 
 const QUALITY_OPTIONS = [
-  { value: 360, label: "360p" },
-  { value: 480, label: "480p" },
-  { value: 720, label: "720p HD" },
-  { value: 1080, label: "1080p Full HD" },
+  { value: 360, label: "360p", badge: "Fast" },
+  { value: 480, label: "480p", badge: "SD" },
+  { value: 720, label: "720p HD", badge: "Recommended" },
+  { value: 1080, label: "1080p FHD", badge: "Crisp" },
 ];
 
 /* =========================================================
@@ -91,7 +142,6 @@ const QUALITY_OPTIONS = [
 const validatePlatformUrl = (value, slug) => {
   try {
     if (!value?.trim()) return false;
-
     const parsed = new URL(value.trim());
     const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
 
@@ -103,7 +153,6 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".youtube.com")
       );
     }
-
     if (slug === "facebook-video-downloader") {
       return (
         hostname === "facebook.com" ||
@@ -112,7 +161,6 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".facebook.com")
       );
     }
-
     if (slug === "instagram-video-downloader") {
       return (
         hostname === "instagram.com" ||
@@ -120,7 +168,6 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".instagram.com")
       );
     }
-
     if (slug === "pinterest-downloader") {
       return (
         hostname === "pinterest.com" ||
@@ -129,7 +176,6 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".pinterest.com")
       );
     }
-
     return false;
   } catch {
     return false;
@@ -141,42 +187,23 @@ const validatePlatformUrl = (value, slug) => {
 ========================================================= */
 
 const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
-
+  if (!bytes || Number.isNaN(Number(bytes))) return "Size calculating...";
   const value = Number(bytes);
-
   if (value <= 0) return "Ready";
   if (value < 1024) return `${value} B`;
-
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-
-  if (value < 1024 * 1024 * 1024) {
-    return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  }
-
-  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
 const getFilenameFromHeaders = (headers, fallback) => {
   try {
     const disposition = headers?.["content-disposition"];
-
     if (!disposition) return fallback;
-
     const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-
-    if (utfMatch?.[1]) {
-      return decodeURIComponent(utfMatch[1]);
-    }
-
+    if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
     const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
-
-    if (normalMatch?.[1]) {
-      return decodeURIComponent(normalMatch[1]);
-    }
-
+    if (normalMatch?.[1]) return decodeURIComponent(normalMatch[1]);
     return fallback;
   } catch {
     return fallback;
@@ -184,30 +211,20 @@ const getFilenameFromHeaders = (headers, fallback) => {
 };
 
 const getAxiosErrorMessage = async (error) => {
-  if (
-    error?.response?.data &&
-    !(error.response.data instanceof Blob)
-  ) {
+  if (error?.response?.data && !(error.response.data instanceof Blob)) {
     return (
       error.response.data.message ||
       error.response.data.error ||
       "Request failed."
     );
   }
-
   if (error?.response?.data instanceof Blob) {
     try {
       const text = await error.response.data.text();
-
       if (text) {
         try {
           const json = JSON.parse(text);
-
-          return (
-            json?.message ||
-            json?.error ||
-            text
-          );
+          return json?.message || json?.error || text;
         } catch {
           return text;
         }
@@ -216,11 +233,9 @@ const getAxiosErrorMessage = async (error) => {
       // Ignore
     }
   }
-
   if (error?.code === "ECONNABORTED") {
     return "Server request timed out. Please try again.";
   }
-
   return error?.message || "Something went wrong.";
 };
 
@@ -228,57 +243,49 @@ const getAxiosErrorMessage = async (error) => {
    MAIN COMPONENT
 ========================================================= */
 
-function Tools() {
+export default function Tools() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
-
   const [activeTool, setActiveTool] = useState(null);
-
   const [inputValue, setInputValue] = useState("");
-
   const [isExtracting, setIsExtracting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-
   const [progress, setProgress] = useState(0);
-
   const [error, setError] = useState("");
-
   const [videoInfo, setVideoInfo] = useState(null);
-
   const [selectedQuality, setSelectedQuality] = useState(null);
-
   const [downloadResult, setDownloadResult] = useState(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  /* =========================================================
-     FILTER TOOLS
-  ========================================================= */
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && activeTool && !isExtracting && !isDownloading) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTool, isExtracting, isDownloading]);
 
+  /* Filter Tools */
   const filteredTools = useMemo(() => {
     const text = search.toLowerCase().trim();
-
     return toolsData.filter((tool) => {
       const matchesSearch =
         !text ||
         tool.name.toLowerCase().includes(text) ||
         tool.description.toLowerCase().includes(text) ||
         tool.category.toLowerCase().includes(text);
-
       const matchesCategory =
-        category === "All" ||
-        tool.category === category;
-
+        category === "All" || tool.category === category;
       return matchesSearch && matchesCategory;
     });
   }, [search, category]);
 
-  /* =========================================================
-     OPEN TOOL
-  ========================================================= */
-
+  /* Open / Close Handlers */
   const openTool = (tool) => {
-    // Coming Soon tools don't open downloader modal
     if (tool.comingSoon) return;
-
     setActiveTool(tool);
     setInputValue("");
     setError("");
@@ -290,13 +297,8 @@ function Tools() {
     setIsDownloading(false);
   };
 
-  /* =========================================================
-     CLOSE MODAL
-  ========================================================= */
-
   const closeModal = () => {
     if (isExtracting || isDownloading) return;
-
     if (downloadResult?.downloadUrl) {
       try {
         window.URL.revokeObjectURL(downloadResult.downloadUrl);
@@ -304,7 +306,6 @@ function Tools() {
         // Ignore
       }
     }
-
     setActiveTool(null);
     setInputValue("");
     setError("");
@@ -316,33 +317,39 @@ function Tools() {
     setIsDownloading(false);
   };
 
-  /* =========================================================
-     EXTRACT MEDIA
-  ========================================================= */
+  /* Paste from Clipboard */
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setInputValue(text.trim());
+      }
+    } catch {
+      // Fallback ignore
+    }
+  };
 
+  /* Extract Media Information */
   const extractVideo = async (event) => {
     event.preventDefault();
-
     if (!activeTool) return;
 
     setError("");
     setVideoInfo(null);
     setSelectedQuality(null);
     setDownloadResult(null);
-
-    setProgress(10);
+    setProgress(15);
 
     const cleanUrl = inputValue.trim();
-
     if (!cleanUrl) {
-      setError("Please enter a URL.");
+      setError("Please paste a valid video or media link.");
       setProgress(0);
       return;
     }
 
     if (!validatePlatformUrl(cleanUrl, activeTool.slug)) {
       setError(
-        `Please enter a valid ${activeTool.category} URL.`
+        `Invalid URL format. Please provide a valid ${activeTool.category} link.`
       );
       setProgress(0);
       return;
@@ -359,18 +366,8 @@ function Tools() {
           url: cleanUrl,
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           timeout: 120000,
-
-          /*
-            Progress during extraction.
-            Backend must send progress information through
-            a streaming/SSE/WebSocket system for true server-side
-            percentage. Axios upload/download progress cannot
-            measure server processing itself.
-          */
         }
       );
 
@@ -378,18 +375,13 @@ function Tools() {
 
       if (!response?.data?.success) {
         throw new Error(
-          response?.data?.message ||
-            "Unable to extract media information."
+          response?.data?.message || "Unable to extract media information."
         );
       }
 
-      const data =
-        response.data.data || response.data;
-
+      const data = response.data.data || response.data;
       if (!data) {
-        throw new Error(
-          "No media information returned by server."
-        );
+        throw new Error("No media stream found on this page.");
       }
 
       setVideoInfo(data);
@@ -400,50 +392,28 @@ function Tools() {
         return;
       }
 
-      const availableFormats = Array.isArray(data.formats)
-        ? data.formats
-        : [];
-
+      const availableFormats = Array.isArray(data.formats) ? data.formats : [];
       const availableHeights = availableFormats
         .map((item) => Number(item?.height))
-        .filter(
-          (height) =>
-            Number.isFinite(height) &&
-            height > 0
-        );
+        .filter((height) => Number.isFinite(height) && height > 0);
 
-      const uniqueHeights = [
-        ...new Set(availableHeights),
-      ];
-
-      const preferredQuality = [
-        720,
-        360,
-        480,
-        1080,
-      ].find((quality) =>
+      const uniqueHeights = [...new Set(availableHeights)];
+      const preferredQuality = [720, 1080, 480, 360].find((quality) =>
         uniqueHeights.includes(quality)
       );
 
       if (preferredQuality) {
         setSelectedQuality(preferredQuality);
       } else if (uniqueHeights.length > 0) {
-        setSelectedQuality(
-          Math.max(...uniqueHeights)
-        );
+        setSelectedQuality(Math.max(...uniqueHeights));
       } else {
         setSelectedQuality(720);
       }
 
       setProgress(100);
     } catch (err) {
-      const message =
-        await getAxiosErrorMessage(err);
-
-      setError(
-        message || "Unable to extract media."
-      );
-
+      const message = await getAxiosErrorMessage(err);
+      setError(message || "Unable to fetch media stream. Please verify the URL.");
       setProgress(0);
       setVideoInfo(null);
       setSelectedQuality(null);
@@ -452,23 +422,11 @@ function Tools() {
     }
   };
 
-  /* =========================================================
-     DOWNLOAD MEDIA
-     Facebook + Pinterest existing logic preserved
-  ========================================================= */
-
+  /* Download Media */
   const downloadVideo = async () => {
-    if (
-      !activeTool ||
-      !videoInfo ||
-      isDownloading ||
-      isExtracting
-    ) {
-      return;
-    }
+    if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
 
     const cleanUrl = inputValue.trim();
-
     if (!cleanUrl) {
       setError("Original URL is missing.");
       return;
@@ -479,45 +437,24 @@ function Tools() {
     setIsDownloading(true);
     setProgress(5);
 
-    const selectedFormat =
-      Array.isArray(videoInfo.formats)
-        ? videoInfo.formats.find(
-            (format) =>
-              Number(format?.height) ===
-              Number(selectedQuality)
-          )
-        : null;
+    const selectedFormat = Array.isArray(videoInfo.formats)
+      ? videoInfo.formats.find(
+          (format) => Number(format?.height) === Number(selectedQuality)
+        )
+      : null;
 
     const payload = {
       tool: activeTool.slug,
-
-      platform:
-        activeTool.category.toLowerCase(),
-
+      platform: activeTool.category.toLowerCase(),
       url: cleanUrl,
-
-      quality:
-        selectedQuality || 720,
-
-      format: selectedQuality
-        ? `${selectedQuality}p`
-        : "720p",
-
-      formatId:
-        selectedFormat?.formatId ||
-        String(selectedQuality || "720"),
-
-      title:
-        videoInfo.title ||
-        `${activeTool.category}-media`,
-
+      quality: selectedQuality || 720,
+      format: selectedQuality ? `${selectedQuality}p` : "720p",
+      formatId: selectedFormat?.formatId || String(selectedQuality || "720"),
+      title: videoInfo.title || `${activeTool.category}-media`,
       isPhoto: Boolean(videoInfo.isPhoto),
-
       directUrl: videoInfo.isPhoto
-        ? videoInfo.thumbnail ||
-          videoInfo.url
-        : selectedFormat?.directUrl ||
-          null,
+        ? videoInfo.thumbnail || videoInfo.url
+        : selectedFormat?.directUrl || null,
     };
 
     try {
@@ -525,59 +462,28 @@ function Tools() {
         `${API_BASE_URL}/tools/download`,
         payload,
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
-
+          headers: { "Content-Type": "application/json" },
           responseType: "blob",
-
           timeout: 120000,
-
-          /*
-             Real download progress is measured from
-             response bytes when Content-Length is available.
-          */
-
-          onDownloadProgress: (
-            progressEvent
-          ) => {
+          onDownloadProgress: (progressEvent) => {
             if (progressEvent.total) {
               const percent = Math.round(
-                (progressEvent.loaded * 100) /
-                  progressEvent.total
+                (progressEvent.loaded * 100) / progressEvent.total
               );
-
-              setProgress(
-                Math.min(percent, 99)
-              );
+              setProgress(Math.min(percent, 99));
             } else {
-              setProgress((previous) =>
-                previous < 90
-                  ? previous + 5
-                  : previous
-              );
+              setProgress((previous) => (previous < 90 ? previous + 5 : previous));
             }
           },
         }
       );
 
-      const contentType =
-        response.headers["content-type"] || "";
+      const contentType = response.headers["content-type"] || "";
 
-      /* =====================================================
-         JSON RESPONSE
-      ===================================================== */
-
-      if (
-        contentType.includes(
-          "application/json"
-        )
-      ) {
-        const text =
-          await response.data.text();
-
+      // Handle JSON response
+      if (contentType.includes("application/json")) {
+        const text = await response.data.text();
         let json = {};
-
         try {
           json = JSON.parse(text);
         } catch {
@@ -586,85 +492,50 @@ function Tools() {
 
         if (json.downloadUrl) {
           setProgress(100);
-
           setDownloadResult({
             success: true,
-
-            downloadUrl:
-              json.downloadUrl,
-
+            downloadUrl: json.downloadUrl,
             filename:
-              json.filename ||
-              `${activeTool.category.toLowerCase()}-video.mp4`,
-
-            quality:
-              selectedQuality || 720,
-
+              json.filename || `${activeTool.category.toLowerCase()}-media.mp4`,
+            quality: selectedQuality || 720,
             size: json.size || 0,
-
             isPhoto: false,
           });
-
           return;
         }
-
         throw new Error(
-          json?.message ||
-            "Download failed. Please try another quality."
+          json?.message || "Download failed. Please try another quality."
         );
       }
 
-      /* =====================================================
-         DIRECT FILE BLOB
-      ===================================================== */
-
+      // Handle direct file blob
       const blob =
         response.data instanceof Blob
           ? response.data
-          : new Blob(
-              [response.data],
-              {
-                type:
-                  contentType ||
-                  "application/octet-stream",
-              }
-            );
+          : new Blob([response.data], {
+              type: contentType || "application/octet-stream",
+            });
 
       if (!blob || blob.size <= 0) {
-        throw new Error(
-          "Downloaded file is empty."
-        );
+        throw new Error("Downloaded stream returned an empty file.");
       }
 
       const isPhoto =
-        videoInfo?.isPhoto === true ||
-        contentType.includes("image/");
+        videoInfo?.isPhoto === true || contentType.includes("image/");
+      let fallbackExtension = isPhoto ? "jpg" : "mp4";
+      if (contentType.includes("png")) fallbackExtension = "png";
+      else if (contentType.includes("webp")) fallbackExtension = "webp";
 
-      let fallbackExtension =
-        isPhoto ? "jpg" : "mp4";
+      const defaultFilename = `${activeTool.category.toLowerCase()}-${
+        selectedQuality || "media"
+      }.${fallbackExtension}`;
 
-      if (contentType.includes("png")) {
-        fallbackExtension = "png";
-      } else if (
-        contentType.includes("webp")
-      ) {
-        fallbackExtension = "webp";
-      }
+      const filename = getFilenameFromHeaders(
+        response.headers,
+        defaultFilename
+      );
 
-      const defaultFilename =
-        `${activeTool.category.toLowerCase()}-${
-          selectedQuality || "media"
-        }.${fallbackExtension}`;
-
-      const filename =
-        getFilenameFromHeaders(
-          response.headers,
-          defaultFilename
-        );
-
-      const downloadUrl =
-        window.URL.createObjectURL(blob);
-
+      const downloadUrl = window.URL.createObjectURL(blob);
       setProgress(100);
 
       setDownloadResult({
@@ -676,35 +547,22 @@ function Tools() {
         isPhoto,
       });
     } catch (err) {
-      const message =
-        await getAxiosErrorMessage(err);
-
-      setError(
-        message ||
-          "Unable to download file."
-      );
-
+      const message = await getAxiosErrorMessage(err);
+      setError(message || "Unable to download file.");
       setProgress(0);
     } finally {
       setIsDownloading(false);
     }
   };
 
-  /* =========================================================
-     PROCESS ANOTHER
-  ========================================================= */
-
   const processAnother = () => {
     if (downloadResult?.downloadUrl) {
       try {
-        window.URL.revokeObjectURL(
-          downloadResult.downloadUrl
-        );
+        window.URL.revokeObjectURL(downloadResult.downloadUrl);
       } catch {
         // Ignore
       }
     }
-
     setInputValue("");
     setVideoInfo(null);
     setSelectedQuality(null);
@@ -715,829 +573,524 @@ function Tools() {
     setIsDownloading(false);
   };
 
-  /* =========================================================
-     QUALITY CHECK
-  ========================================================= */
-
   const hasQuality = (quality) => {
-    if (
-      !videoInfo ||
-      videoInfo.isPhoto
-    ) {
-      return false;
-    }
-
-    if (
-      !Array.isArray(
-        videoInfo.formats
-      ) ||
-      videoInfo.formats.length === 0
-    ) {
+    if (!videoInfo || videoInfo.isPhoto) return false;
+    if (!Array.isArray(videoInfo.formats) || videoInfo.formats.length === 0)
       return true;
-    }
-
     return videoInfo.formats.some(
-      (item) =>
-        Number(item?.height) ===
-        Number(quality)
+      (item) => Number(item?.height) === Number(quality)
     );
   };
 
+  const copyDownloadUrl = () => {
+    if (downloadResult?.downloadUrl) {
+      navigator.clipboard.writeText(downloadResult.downloadUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#070816] text-white font-sans selection:bg-orange-500/30 selection:text-orange-200 overflow-x-hidden pb-24">
+      {/* Dynamic Background Ambient Glows */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-1/2 -top-40 -translate-x-1/2 h-[500px] w-[800px] rounded-full bg-gradient-to-tr from-indigo-600/15 via-orange-600/10 to-pink-600/15 blur-[140px]" />
+        <div className="absolute right-[-120px] top-[30%] h-[400px] w-[400px] rounded-full bg-purple-600/10 blur-[120px]" />
+      </div>
 
-      {/* =====================================================
-          BACKGROUND
-      ===================================================== */}
+      {/* Hero Header */}
+      <header className="relative z-10 mx-auto max-w-7xl px-4 pt-16 pb-10 sm:px-6 lg:pt-20 text-center">
+        <div className="inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-widest text-orange-300 backdrop-blur-xl mb-5 shadow-sm">
+          <Zap className="h-3.5 w-3.5" />
+          Fast & Cloud Powered Utilities
+        </div>
 
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
-
-      {/* =====================================================
-          HERO
-      ===================================================== */}
-
-      <section className="relative pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
-
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">
-          Download Videos & Media
-          <br className="hidden sm:block" />
-
-          <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
-            {" "}Without Limits.
+        <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl leading-[1.1]">
+          Media Extractor &{" "}
+          <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-rose-400 bg-clip-text text-transparent">
+            Downloader Hub.
           </span>
         </h1>
 
-        <p className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-slate-400 leading-relaxed">
-          Download publicly accessible videos and photos from Facebook and Pinterest instantly.
+        <p className="mx-auto mt-4 max-w-2xl text-sm sm:text-base text-slate-400 leading-relaxed">
+          Easily extract and save high-resolution public media from Facebook & Pinterest with no watermarks or limits.
         </p>
 
-        {/* ===================================================
-            SEARCH
-        =================================================== */}
-
-        <div className="mt-10 max-w-xl mx-auto">
-
-          <div className="relative group">
-
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition pointer-events-none" />
-
-            <div className="relative flex items-center bg-[#131b2e] border border-slate-800 rounded-2xl shadow-xl overflow-hidden px-4 py-2">
-
-              <span className="text-lg mr-3 text-slate-400">
-                🔍
-              </span>
-
+        {/* Search Bar */}
+        <div className="mx-auto mt-8 max-w-xl">
+          <div className="group relative">
+            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-orange-500/20 via-indigo-500/20 to-pink-500/20 opacity-70 blur-md transition duration-300 group-focus-within:opacity-100" />
+            <div className="relative flex items-center rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 shadow-2xl backdrop-blur-xl focus-within:border-orange-400/50">
+              <Search className="mr-3 h-4 w-4 shrink-0 text-orange-400" />
               <input
                 type="text"
                 value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search platforms or tools..."
-                className="w-full bg-transparent py-3 text-sm text-white placeholder-slate-500 outline-none"
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search tools, platforms, or format..."
+                className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-slate-500 outline-none"
               />
-
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white transition"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* =====================================================
-          TOOLS GRID
-      ===================================================== */}
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
-
-        {/* CATEGORY BUTTONS */}
-
-        <div className="flex items-center justify-center gap-2 overflow-x-auto pb-4 mb-10">
-
-          {categories.map((item) => (
-
-            <button
-              key={item}
-              type="button"
-              onClick={() =>
-                setCategory(item)
-              }
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-                category === item
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                  : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              {item}
-            </button>
-
-          ))}
-
-        </div>
-
-        {/* ===================================================
-            GRID
-        =================================================== */}
-
-        {filteredTools.length > 0 ? (
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-            {filteredTools.map((tool) => (
-
-              <div
-                key={tool.id}
-                className={`group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 ${
-                  tool.comingSoon
-                    ? ""
-                    : "hover:-translate-y-1.5 hover:border-indigo-500/40"
+      {/* Main Grid Section */}
+      <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Category Pills */}
+        <div className="flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
+          {categories.map((item) => {
+            const active = category === item;
+            return (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setCategory(item)}
+                className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all duration-200 ${
+                  active
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
+                    : "border border-white/10 bg-white/[0.025] text-slate-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
                 }`}
               >
+                {item}
+              </button>
+            );
+          })}
+        </div>
 
-                <div>
+        {/* Tools Cards Grid */}
+        {filteredTools.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {filteredTools.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <div
+                  key={tool.id}
+                  className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl shadow-lg transition-all duration-300 ${
+                    tool.comingSoon
+                      ? "opacity-80"
+                      : `hover:-translate-y-1 hover:bg-white/[0.05] ${tool.accentBorder} hover:shadow-xl`
+                  }`}
+                >
+                  {/* Subtle top glow */}
+                  <div
+                    className={`pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 h-28 w-28 rounded-full bg-gradient-to-b ${tool.accentGlow} blur-xl`}
+                  />
 
-                  {/* ICON + CATEGORY */}
-
-                  <div className="flex items-center justify-between mb-6">
-
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
-                    >
-                      {tool.icon}
+                  <div>
+                    {/* Header: Icon + Category Badge */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div
+                        className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-tr ${tool.gradient} text-white shadow-md shadow-black/30`}
+                      >
+                        <Icon />
+                      </div>
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tool.badgeColor}`}
+                      >
+                        {tool.category}
+                      </span>
                     </div>
 
-                    <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
-                    >
-                      {tool.category}
-                    </span>
-
+                    {/* Title & Description */}
+                    <h3 className="text-base font-bold text-white group-hover:text-orange-200 transition-colors">
+                      {tool.name}
+                    </h3>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                      {tool.description}
+                    </p>
                   </div>
 
-                  {/* TITLE */}
-
-                  <h3 className="text-xl font-bold text-white">
-                    {tool.name}
-                  </h3>
-
-                  {/* DESCRIPTION */}
-
-                  <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
-                    {tool.description}
-                  </p>
-
+                  {/* Launch CTA */}
+                  <div className="mt-6 pt-3.5 border-t border-white/5">
+                    {tool.comingSoon ? (
+                      <div className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] py-2.5 text-xs font-bold text-amber-300">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Coming Soon
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openTool(tool)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        Launch Downloader
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-
-                {/* =================================================
-                    BUTTON
-                ================================================= */}
-
-                <div className="mt-8 pt-5 border-t border-slate-800">
-
-                  {tool.comingSoon ? (
-
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3.5 text-sm font-bold text-amber-300 cursor-not-allowed"
-                    >
-                      🚧 Coming Soon
-                    </button>
-
-                  ) : (
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openTool(tool)
-                      }
-                      className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
-                    >
-                      Launch Utility →
-                    </button>
-
-                  )}
-
-                </div>
-
-              </div>
-
-            ))}
-
+              );
+            })}
           </div>
-
         ) : (
-
-          <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-16 text-center">
-
-            <h3 className="text-xl font-bold text-white">
-              No tools found
-            </h3>
-
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
+            <Search className="mx-auto h-8 w-8 text-orange-400/80" />
+            <h3 className="mt-3 text-base font-bold text-white">No tools found</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              No platform matched your query "{search}".
+            </p>
             <button
               type="button"
               onClick={() => {
                 setSearch("");
                 setCategory("All");
               }}
-              className="mt-6 px-6 py-3 rounded-xl bg-slate-800 hover:bg-indigo-600 font-semibold text-sm"
+              className="mt-4 rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/15 transition"
             >
               Reset Filters
             </button>
-
           </div>
-
         )}
-
       </main>
 
-      {/* =====================================================
-          MODAL
-      ===================================================== */}
+      {/* =========================================================
+          DOWNLOAD UTILITY MODAL
+      ========================================================= */}
 
       {activeTool && (
-
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
           onMouseDown={(e) => {
-
-            if (
-              e.target === e.currentTarget &&
-              !isExtracting &&
-              !isDownloading
-            ) {
+            if (e.target === e.currentTarget && !isExtracting && !isDownloading) {
               closeModal();
             }
-
           }}
         >
-
-          <div className="relative w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl my-8">
-
-            {/* TOP LINE */}
-
+          <div className="relative w-full max-w-xl rounded-3xl border border-white/15 bg-[#0d0f22] p-6 shadow-2xl my-8">
+            {/* Top gradient stripe */}
             <div
-              className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${activeTool.gradient}`}
+              className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${activeTool.gradient}`}
             />
 
-            {/* HEADER */}
-
-            <div className="flex items-center justify-between border-b border-slate-800 pb-5">
-
-              <div className="flex items-center gap-3.5">
-
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
                 <div
-                  className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${activeTool.gradient} flex items-center justify-center text-xl font-black text-white`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr ${activeTool.gradient} text-white shadow-md`}
                 >
-                  {activeTool.icon}
+                  <activeTool.icon />
                 </div>
-
                 <div>
-
-                  <h3 className="font-bold text-white">
+                  <h3 className="text-sm sm:text-base font-bold text-white">
                     {activeTool.name}
                   </h3>
-
-                  <span className="text-xs text-slate-400">
-                    {activeTool.category} Engine
-                  </span>
-
+                  <p className="text-[10px] text-slate-400">
+                    Direct Cloud Stream Extractor
+                  </p>
                 </div>
-
               </div>
 
-              {!isExtracting &&
-                !isDownloading && (
+              {!isExtracting && !isDownloading && (
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/10 hover:text-white transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Error Message Box */}
+            {error && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-bold block">Processing Error</span>
+                  <span className="text-[11px] opacity-90">{error}</span>
+                </div>
+              </div>
+            )}
+
+            {/* =========================================================
+                VIEW 1: DOWNLOAD COMPLETE
+            ========================================================= */}
+            {downloadResult?.success ? (
+              <div className="py-6 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10">
+                  <CheckCircle2 className="h-7 w-7" />
+                </div>
+
+                <h4 className="text-lg font-extrabold text-white">
+                  {downloadResult.isPhoto ? "Photo Ready!" : "Video Ready to Save!"}
+                </h4>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  {downloadResult.isPhoto
+                    ? "Full resolution original picture"
+                    : `${downloadResult.quality}p High Quality Stream`}{" "}
+                  is ready.
+                </p>
+
+                <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
+                  <span>File Size: {formatBytes(downloadResult.size)}</span>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-2.5">
+                  <a
+                    href={downloadResult.downloadUrl}
+                    download={downloadResult.filename}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:opacity-95"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download File to Device
+                  </a>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={copyDownloadUrl}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition"
+                    >
+                      {copiedLink ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          Copied Link
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy Link
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={processAnother}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Download Another
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : videoInfo ? (
+              /* =========================================================
+                 VIEW 2: MEDIA OPTIONS & QUALITY SELECTION
+              ========================================================= */
+              <div className="mt-5 space-y-4">
+                {/* Media Preview Card */}
+                <div className="flex items-center gap-3.5 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  {videoInfo.thumbnail ? (
+                    <img
+                      src={videoInfo.thumbnail}
+                      alt="Thumbnail"
+                      className="h-16 w-24 rounded-lg object-cover border border-white/10 shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-16 w-24 items-center justify-center rounded-lg bg-slate-900 border border-white/10 text-slate-500 shrink-0">
+                      <Film className="h-6 w-6" />
+                    </div>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <h4 className="line-clamp-2 text-xs font-bold text-white">
+                      {videoInfo.title || "Target Media"}
+                    </h4>
+                    <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400">
+                      {videoInfo.uploader && (
+                        <span>By {videoInfo.uploader}</span>
+                      )}
+                      <span>•</span>
+                      <span className="capitalize">{videoInfo.platform || activeTool.category}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quality Grid for Videos */}
+                {!videoInfo.isPhoto && (
+                  <div>
+                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Select Video Quality
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {QUALITY_OPTIONS.map((quality) => {
+                        const available = hasQuality(quality.value);
+                        const selected =
+                          Number(selectedQuality) === Number(quality.value);
+
+                        return (
+                          <button
+                            key={quality.value}
+                            type="button"
+                            disabled={isDownloading || !available}
+                            onClick={() => setSelectedQuality(quality.value)}
+                            className={`flex items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                              selected
+                                ? "border-orange-400 bg-orange-500/15 shadow-sm shadow-orange-500/20"
+                                : available
+                                ? "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]"
+                                : "border-white/5 bg-white/[0.01] opacity-35 cursor-not-allowed"
+                            }`}
+                          >
+                            <div>
+                              <span className="text-xs font-bold text-white block">
+                                {quality.label}
+                              </span>
+                              <span className="text-[9px] text-slate-400">
+                                {available ? quality.badge : "Unavailable"}
+                              </span>
+                            </div>
+
+                            {selected && (
+                              <Check className="h-4 w-4 text-orange-400" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Download Progress Bar */}
+                {isDownloading && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-[11px] mb-1.5">
+                      <span className="text-slate-400">Downloading stream...</span>
+                      <span className="text-orange-400 font-bold">{progress}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-rose-500 transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="mt-5 flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    disabled={isDownloading}
+                    onClick={processAnother}
+                    className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] py-3 text-xs font-bold text-slate-300 hover:bg-white/10 transition disabled:opacity-40"
+                  >
+                    Change Link
+                  </button>
 
                   <button
                     type="button"
-                    onClick={closeModal}
-                    className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
+                    disabled={(!videoInfo.isPhoto && !selectedQuality) || isDownloading}
+                    onClick={downloadVideo}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-xs font-bold text-white shadow-md shadow-orange-500/20 hover:opacity-95 transition disabled:opacity-40"
                   >
-                    ✕
+                    {isDownloading ? (
+                      `Downloading ${progress}%`
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        {videoInfo.isPhoto ? "Download Photo" : "Download Video"}
+                      </>
+                    )}
                   </button>
-
-                )}
-
-            </div>
-
-            {/* ERROR */}
-
-            {error && (
-
-              <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
-
-                <strong className="block mb-1">
-                  Processing Failed
-                </strong>
-
-                <span className="text-xs break-words">
-                  {error}
-                </span>
-
-              </div>
-
-            )}
-
-            {/* =================================================
-                DOWNLOAD COMPLETE
-            ================================================= */}
-
-            {downloadResult?.success ? (
-
-              <div className="py-8 text-center">
-
-                <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl text-emerald-400 mb-5">
-                  ✓
                 </div>
-
-                <h4 className="text-xl font-bold text-white">
-                  {downloadResult.isPhoto
-                    ? "Photo Ready"
-                    : "Video Ready"}
-                </h4>
-
-                <p className="mt-2 text-sm text-slate-400">
-
-                  {downloadResult.isPhoto
-                    ? "High Quality Photo"
-                    : `${downloadResult.quality}p video`}{" "}
-                  is ready.
-
-                </p>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  File status:{" "}
-                  {formatBytes(
-                    downloadResult.size
-                  )}
-                </p>
-
-                <a
-                  href={
-                    downloadResult.downloadUrl
-                  }
-                  download={
-                    downloadResult.filename
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4 text-sm font-bold text-white hover:from-emerald-400 hover:to-teal-500 transition shadow-lg shadow-emerald-500/20"
-                >
-                  ⬇ Download File
-                </a>
-
-                <button
-                  type="button"
-                  onClick={processAnother}
-                  className="mt-3 w-full rounded-2xl border border-slate-700 bg-slate-800/50 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
-                >
-                  Process Another Link
-                </button>
-
               </div>
-
-            ) : videoInfo ? (
-
-              /* =================================================
-                 MEDIA INFORMATION
-              ================================================= */
-
-              <div className="mt-6">
-
-                <div className="rounded-2xl border border-slate-800 bg-[#0c1322] p-4">
-
-                  <div className="flex gap-4">
-
-                    {videoInfo.thumbnail && (
-
-                      <img
-                        src={
-                          videoInfo.thumbnail
-                        }
-                        alt="Thumbnail"
-                        className="w-32 h-20 object-cover rounded-xl flex-shrink-0"
-                        onError={(e) => {
-                          e.currentTarget.style.display =
-                            "none";
-                        }}
-                      />
-
-                    )}
-
-                    <div className="min-w-0">
-
-                      <h4 className="font-bold text-white line-clamp-2">
-                        {videoInfo.title ||
-                          "Media"}
-                      </h4>
-
-                      {videoInfo.uploader && (
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          By:{" "}
-                          {videoInfo.uploader}
-                        </p>
-
-                      )}
-
-                      {videoInfo.platform && (
-
-                        <p className="mt-1 text-xs text-slate-600 capitalize">
-                          Platform:{" "}
-                          {videoInfo.platform}
-                        </p>
-
-                      )}
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-                {/* =================================================
-                    PHOTO
-                ================================================= */}
-
-                {videoInfo.isPhoto ? (
-
-                  <div className="mt-6">
-
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/30 p-5 text-center">
-
-                      <p className="text-sm text-slate-400">
-                        High resolution photo is ready to download.
-                      </p>
-
-                    </div>
-
-                    {/* DOWNLOAD PROGRESS */}
-
-                    {isDownloading && (
-
-                      <div className="mt-6">
-
-                        <div className="flex justify-between text-xs mb-2">
-
-                          <span className="text-slate-400">
-                            Downloading...
-                          </span>
-
-                          <span className="text-indigo-400 font-bold">
-                            {progress}%
-                          </span>
-
-                        </div>
-
-                        <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
-
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300"
-                            style={{
-                              width: `${progress}%`,
-                            }}
-                          />
-
-                        </div>
-
-                      </div>
-
-                    )}
-
-                    <div className="mt-7 flex gap-3">
-
-                      <button
-                        type="button"
-                        disabled={
-                          isDownloading
-                        }
-                        onClick={
-                          processAnother
-                        }
-                        className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-3.5 text-sm font-semibold text-slate-300 disabled:opacity-50"
-                      >
-                        Change URL
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={
-                          isDownloading
-                        }
-                        onClick={
-                          downloadVideo
-                        }
-                        className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3.5 text-sm font-bold text-white disabled:opacity-50"
-                      >
-                        {isDownloading
-                          ? `Downloading ${progress}%`
-                          : "Download Photo"}
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                ) : (
-
-                  /* =================================================
-                     VIDEO QUALITY
-                  ================================================= */
-
-                  <div className="mt-6">
-
-                    <h4 className="font-bold text-white mb-3">
-                      Select Video Quality
-                    </h4>
-
-                    <div className="grid grid-cols-2 gap-3">
-
-                      {QUALITY_OPTIONS.map(
-                        (quality) => {
-
-                          const available =
-                            hasQuality(
-                              quality.value
-                            );
-
-                          const selected =
-                            Number(
-                              selectedQuality
-                            ) ===
-                            Number(
-                              quality.value
-                            );
-
-                          return (
-
-                            <button
-                              key={
-                                quality.value
-                              }
-                              type="button"
-                              disabled={
-                                isDownloading ||
-                                !available
-                              }
-                              onClick={() =>
-                                setSelectedQuality(
-                                  quality.value
-                                )
-                              }
-                              className={`relative rounded-2xl border p-4 text-left transition ${
-                                selected
-                                  ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20"
-                                  : available
-                                  ? "border-slate-700 bg-slate-800/40 hover:border-indigo-500/50"
-                                  : "border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed"
-                              }`}
-                            >
-
-                              <div className="flex items-center justify-between">
-
-                                <span className="font-bold text-white">
-                                  {
-                                    quality.label
-                                  }
-                                </span>
-
-                                {selected && (
-                                  <span className="text-indigo-400">
-                                    ✓
-                                  </span>
-                                )}
-
-                              </div>
-
-                              {!available && (
-
-                                <span className="mt-1 block text-[10px] text-slate-600">
-                                  Not available
-                                </span>
-
-                              )}
-
-                            </button>
-
-                          );
-                        }
-                      )}
-
-                    </div>
-
-                  </div>
-
-                )}
-
-                {/* =================================================
-                    VIDEO DOWNLOAD PROGRESS
-                ================================================= */}
-
-                {isDownloading &&
-                  !videoInfo.isPhoto && (
-
-                    <div className="mt-6">
-
-                      <div className="flex justify-between text-xs mb-2">
-
-                        <span className="text-slate-400">
-                          Downloading...
-                        </span>
-
-                        <span className="text-indigo-400 font-bold">
-                          {progress}%
-                        </span>
-
-                      </div>
-
-                      <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
-
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300"
-                          style={{
-                            width: `${progress}%`,
-                          }}
-                        />
-
-                      </div>
-
-                    </div>
-
-                  )}
-
-                {/* =================================================
-                    VIDEO BUTTONS
-                ================================================= */}
-
-                {!videoInfo.isPhoto && (
-
-                  <div className="mt-7 flex gap-3">
-
-                    <button
-                      type="button"
-                      disabled={
-                        isDownloading
-                      }
-                      onClick={
-                        processAnother
-                      }
-                      className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50"
-                    >
-                      Change URL
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        !selectedQuality ||
-                        isDownloading
-                      }
-                      onClick={
-                        downloadVideo
-                      }
-                      className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3.5 text-sm font-bold text-white disabled:opacity-50"
-                    >
-                      {isDownloading
-                        ? `Downloading ${progress}%`
-                        : "Download Now"}
-                    </button>
-
-                  </div>
-
-                )}
-
-              </div>
-
             ) : (
-
-              /* =================================================
-                 URL FORM
-              ================================================= */
-
-              <form
-                onSubmit={extractVideo}
-                className="mt-6 space-y-5"
-              >
-
-                <p className="text-sm leading-relaxed text-slate-400">
-                  Paste the public{" "}
-                  {activeTool.category} link below to extract available download options.
+              /* =========================================================
+                 VIEW 3: URL INPUT FORM
+              ========================================================= */
+              <form onSubmit={extractVideo} className="mt-4 space-y-4">
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Paste the public {activeTool.category} post or video link to extract downloadable formats.
                 </p>
 
                 <div>
+                  <div className="relative">
+                    <input
+                      type="url"
+                      required
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      placeholder={
+                        activeTool.category === "Facebook"
+                          ? "https://www.facebook.com/watch/?v=..."
+                          : "https://www.pinterest.com/pin/..."
+                      }
+                      disabled={isExtracting}
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 pr-20 text-xs sm:text-sm text-white placeholder:text-slate-600 outline-none focus:border-orange-400/50"
+                    />
 
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Target{" "}
-                    {activeTool.category} URL
-                  </label>
-
-                  <input
-                    type="url"
-                    required
-                    value={inputValue}
-                    onChange={(e) =>
-                      setInputValue(
-                        e.target.value
-                      )
-                    }
-                    placeholder={
-                      activeTool.category ===
-                      "Facebook"
-                        ? "https://facebook.com/..."
-                        : "https://pinterest.com/pin/..."
-                    }
-                    disabled={
-                      isExtracting
-                    }
-                    className="w-full rounded-2xl border border-slate-800 bg-[#0c1322] px-4 py-3.5 text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
-                  />
-
+                    {/* Quick Paste Button inside input */}
+                    <button
+                      type="button"
+                      onClick={handlePasteClipboard}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300 hover:bg-white/15 hover:text-white transition"
+                    >
+                      <ClipboardPaste className="h-3 w-3" />
+                      Paste
+                    </button>
+                  </div>
                 </div>
 
-                {/* =================================================
-                    EXTRACTION PROGRESS
-                ================================================= */}
-
+                {/* Extraction Progress */}
                 {isExtracting && (
-
-                  <div>
-
-                    <div className="flex justify-between text-xs mb-2">
-
+                  <div className="pt-2">
+                    <div className="flex justify-between text-[11px] mb-1.5">
                       <span className="text-slate-400">
-                        Extracting details...
+                        Inspecting media headers...
                       </span>
-
-                      <span className="text-indigo-400 font-bold">
+                      <span className="text-orange-400 font-bold">
                         {progress}%
                       </span>
-
                     </div>
-
-                    <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
-
+                    <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300"
-                        style={{
-                          width: `${progress}%`,
-                        }}
+                        className="h-full rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-rose-500 transition-all duration-300"
+                        style={{ width: `${progress}%` }}
                       />
-
                     </div>
-
-                    <p className="mt-2 text-[11px] text-slate-600">
-                      Please wait while the server extracts the media information.
-                    </p>
-
                   </div>
-
                 )}
 
-                {/* =================================================
-                    FORM BUTTONS
-                ================================================= */}
-
-                <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
-
+                {/* Form Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-white/10">
                   <button
                     type="button"
-                    disabled={
-                      isExtracting
-                    }
-                    onClick={
-                      closeModal
-                    }
-                    className="rounded-xl px-5 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800 disabled:opacity-50"
+                    disabled={isExtracting}
+                    onClick={closeModal}
+                    className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    disabled={
-                      isExtracting ||
-                      !inputValue.trim()
-                    }
-                    className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
+                    disabled={isExtracting || !inputValue.trim()}
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 hover:opacity-95 transition disabled:opacity-40"
                   >
-                    {isExtracting
-                      ? `Extracting ${progress}%`
-                      : "Extract Media"}
+                    {isExtracting ? (
+                      `Extracting ${progress}%`
+                    ) : (
+                      <>
+                        Extract Media
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </>
+                    )}
                   </button>
-
                 </div>
-
               </form>
-
             )}
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }
-
-export default Tools;
