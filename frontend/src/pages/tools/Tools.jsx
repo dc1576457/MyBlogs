@@ -388,6 +388,7 @@ function Tools() {
 
       const contentType = response.headers["content-type"] || "";
 
+      // Check if backend returned JSON error
       if (contentType.includes("application/json")) {
         const text = await response.data.text();
         let json = {};
@@ -396,23 +397,10 @@ function Tools() {
         } catch (e) {
           // Ignore
         }
-
-        if (json.downloadUrl) {
-          setProgress(100);
-          setDownloadResult({
-            success: true,
-            downloadUrl: json.downloadUrl,
-            filename: json.filename || `${activeTool.category.toLowerCase()}-video.mp4`,
-            quality: selectedQuality || 720,
-            size: json.size || 0,
-            isPhoto: false,
-          });
-          return;
-        }
-
         throw new Error(json?.message || "Download failed. Please try another quality.");
       }
 
+      // Handle direct file blob
       const blob =
         response.data instanceof Blob
           ? response.data
@@ -669,8 +657,6 @@ function Tools() {
                 <a
                   href={downloadResult.downloadUrl}
                   download={downloadResult.filename}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4 text-sm font-bold text-white hover:from-emerald-400 hover:to-teal-500 transition shadow-lg shadow-emerald-500/20"
                 >
                   ⬇ Download File
