@@ -121,16 +121,13 @@ export default function Home() {
       </div>
 
       {/* Header Area */}
-      <header className="relative z-10 mx-auto max-w-7xl px-4 pt-12 pb-8 sm:px-6 text-center">
+      <header className="relative z-10 mx-auto max-w-6xl px-4 pt-8 pb-6 sm:px-4 text-center">
         {/* Sub-badge */}
-        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-widest text-orange-300 backdrop-blur-md">
-          <Sparkles className="h-3 w-3" />
-          The Digital Magazine
-        </div>
+      
 
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
+        <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
           Curated Thoughts for <br className="hidden sm:block" />
-          <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-orange-300 via-amber-200 to-yellow-300 bg-clip-text text-transparent">
             Modern Creators & Thinkers.
           </span>
         </h1>
