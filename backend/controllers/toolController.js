@@ -2,8 +2,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import crypto from "crypto";
+import axios from "axios";
 import ytDlp from "youtube-dl-exec";
 import { logger } from "../utils/logger.js";
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
 const TEMP_DIR = path.join(os.tmpdir(), "myblog-tools");
 
@@ -13,10 +18,14 @@ const ensureTempDirectory = () => {
   }
 };
 
+/* =========================================================
+   VALIDATE & DETECT PLATFORM
+========================================================= */
+
 const validateUrl = (value) => {
   if (!value || typeof value !== "string") return false;
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(value.trim());
     return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
@@ -26,10 +35,30 @@ const validateUrl = (value) => {
 const getPlatform = (url) => {
   try {
     const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-    if (hostname === "youtube.com" || hostname === "youtu.be" || hostname.endsWith(".youtube.com")) return "youtube";
-    if (hostname === "facebook.com" || hostname === "fb.watch" || hostname.endsWith(".facebook.com")) return "facebook";
-    if (hostname === "instagram.com" || hostname.endsWith(".instagram.com")) return "instagram";
-    if (hostname === "pinterest.com" || hostname === "pin.it" || hostname.endsWith(".pinterest.com")) return "pinterest";
+    if (
+      hostname === "youtube.com" ||
+      hostname === "youtu.be" ||
+      hostname.endsWith(".youtube.com")
+    ) {
+      return "youtube";
+    }
+    if (
+      hostname === "facebook.com" ||
+      hostname === "fb.watch" ||
+      hostname.endsWith(".facebook.com")
+    ) {
+      return "facebook";
+    }
+    if (hostname === "instagram.com" || hostname.endsWith(".instagram.com")) {
+      return "instagram";
+    }
+    if (
+      hostname === "pinterest.com" ||
+      hostname === "pin.it" ||
+      hostname.endsWith(".pinterest.com")
+    ) {
+      return "pinterest";
+    }
     return "unknown";
   } catch {
     return "unknown";
@@ -37,11 +66,11 @@ const getPlatform = (url) => {
 };
 
 const cleanFileName = (name) => {
-  return String(name || "video")
+  return String(name || "download")
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, 100);
 };
 
 const getFormat = (quality) => {
@@ -67,23 +96,29 @@ const getFormat = (quality) => {
 const getYtDlpErrorMessage = (error) => {
   const stderr = error?.stderr || error?.stdout || error?.message || "";
   const text = String(stderr).trim();
-  if (!text) return "Processing failed for this URL.";
-  if (text.includes("Sign in") || text.includes("login required") || text.includes("authentication")) {
-    return "This media requires login or authentication. Only publicly accessible media is supported.";
+
+  if (!text) return "Unable to process this URL.";
+  if (
+    text.includes("Sign in") ||
+    text.includes("login required") ||
+    text.includes("authentication") ||
+    text.includes("confirm you're not a bot")
+  ) {
+    return "This media requires authentication or is restricted. Only public media is supported.";
   }
   if (text.includes("Private video") || text.includes("private")) {
-    return "This media is private and cannot be accessed.";
+    return "This content is private and cannot be downloaded.";
   }
   if (text.includes("Video unavailable") || text.includes("unavailable")) {
     return "The media is unavailable or has been removed.";
   }
   if (text.includes("HTTP Error 403") || text.includes("403 Forbidden")) {
-    return "The platform blocked the request (HTTP 403). Datacenter access might be restricted.";
+    return "The server was blocked by the platform (HTTP 403).";
   }
   if (text.includes("HTTP Error 429")) {
-    return "Rate limit exceeded on the target platform. Please try again later.";
+    return "Rate limit exceeded. Please try again later.";
   }
-  return text.slice(-500);
+  return text.slice(-300);
 };
 
 const removeFile = async (filePath) => {
@@ -97,19 +132,29 @@ const removeFile = async (filePath) => {
 };
 
 /* =========================================================
-   EXTRACT
+   EXTRACT TOOL
 ========================================================= */
+
 export const extractTool = async (req, res) => {
   try {
-    const { url } = req.body || {};
+    const { url, platform } = req.body || {};
+
     if (!url || !validateUrl(url)) {
-      return res.status(400).json({ success: false, message: "Valid URL is required." });
+      return res.status(400).json({
+        success: false,
+        message: "A valid media URL is required.",
+      });
     }
 
     const detectedPlatform = getPlatform(url);
     if (detectedPlatform === "unknown") {
-      return res.status(400).json({ success: false, message: "Platform not supported." });
+      return res.status(400).json({
+        success: false,
+        message: "This platform is not supported.",
+      });
     }
+
+    logger.info(`TOOL EXTRACT | platform=${detectedPlatform} | url=${url}`);
 
     const result = await ytDlp(url, {
       dumpSingleJson: true,
@@ -121,22 +166,29 @@ export const extractTool = async (req, res) => {
     });
 
     if (!result) {
-      return res.status(404).json({ success: false, message: "No media information found." });
+      return res.status(404).json({
+        success: false,
+        message: "No media information found for this URL.",
+      });
     }
 
     const formats = Array.isArray(result.formats) ? result.formats : [];
+
+    // Detect if the target is an image/photo (Instagram/Pinterest image)
     const isPhoto =
-      (!formats.length && Boolean(result.url || result.thumbnail)) ||
+      result._type === "image" ||
       result.ext === "jpg" ||
+      result.ext === "jpeg" ||
       result.ext === "png" ||
       result.ext === "webp" ||
+      (!formats.length && Boolean(result.thumbnail || result.url)) ||
       formats.every((f) => f.vcodec === "none" && f.acodec === "none");
 
     const availableQualities = [
       ...new Set(
         formats
           .map((item) => Number(item.height))
-          .filter((height) => Number.isFinite(height) && height > 0)
+          .filter((h) => Number.isFinite(h) && h > 0)
       ),
     ]
       .sort((a, b) => b - a)
@@ -157,37 +209,99 @@ export const extractTool = async (req, res) => {
         isPhoto,
         qualities: availableQualities,
         formats: formats
-          .filter((item) => item && (item.vcodec !== "none" || item.acodec !== "none"))
+          .filter(
+            (item) =>
+              item && (item.vcodec !== "none" || item.acodec !== "none")
+          )
           .map((item) => ({
             formatId: item.format_id || null,
             ext: item.ext || null,
             quality: item.format_note || null,
             height: item.height || null,
             width: item.width || null,
+            fps: item.fps || null,
             filesize: item.filesize || item.filesize_approx || null,
+            hasVideo: Boolean(item.vcodec && item.vcodec !== "none"),
+            hasAudio: Boolean(item.acodec && item.acodec !== "none"),
           }))
           .slice(0, 100),
       },
     });
   } catch (error) {
     const message = getYtDlpErrorMessage(error);
-    return res.status(500).json({ success: false, message });
+    logger.error(`TOOL EXTRACT ERROR: ${message}`);
+    return res.status(500).json({
+      success: false,
+      message,
+    });
   }
 };
 
 /* =========================================================
-   DOWNLOAD
+   DOWNLOAD TOOL
 ========================================================= */
+
 export const downloadTool = async (req, res) => {
   let outputFile = null;
+
   try {
-    const { url, quality, format, formatId } = req.body || {};
-    if (!url || !validateUrl(url)) {
-      return res.status(400).json({ success: false, message: "Valid URL is required." });
+    const { url, quality, format, formatId, isPhoto, directUrl, title } =
+      req.body || {};
+
+    const sourceUrl = url?.trim();
+
+    if (!sourceUrl || !validateUrl(sourceUrl)) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid media URL is required.",
+      });
     }
 
     ensureTempDirectory();
     const requestId = crypto.randomBytes(12).toString("hex");
+    const cleanBaseTitle = cleanFileName(title);
+
+    /* --------------------------------------------------------
+       1. DIRECT PHOTO DOWNLOAD (Images from Pinterest/Instagram)
+    -------------------------------------------------------- */
+    if (isPhoto || directUrl) {
+      const targetPhotoUrl = directUrl || sourceUrl;
+      try {
+        const photoResponse = await axios.get(targetPhotoUrl, {
+          responseType: "stream",
+          timeout: 60000,
+        });
+
+        const contentType =
+          photoResponse.headers["content-type"] || "image/jpeg";
+        let ext = ".jpg";
+        if (contentType.includes("png")) ext = ".png";
+        if (contentType.includes("webp")) ext = ".webp";
+
+        const finalName = `${cleanBaseTitle}${ext}`;
+
+        res.status(200);
+        res.setHeader("Content-Type", contentType);
+        if (photoResponse.headers["content-length"]) {
+          res.setHeader(
+            "Content-Length",
+            photoResponse.headers["content-length"]
+          );
+        }
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${encodeURIComponent(finalName)}"`
+        );
+
+        return photoResponse.data.pipe(res);
+      } catch {
+        // Fallback to yt-dlp if axios stream fails
+      }
+    }
+
+    /* --------------------------------------------------------
+       2. VIDEO DOWNLOAD VIA YT-DLP
+    -------------------------------------------------------- */
     const baseFile = path.join(TEMP_DIR, `download-${requestId}`);
 
     let selectedFormat;
@@ -199,7 +313,9 @@ export const downloadTool = async (req, res) => {
       selectedFormat = getFormat(quality);
     }
 
-    await ytDlp(url, {
+    logger.info(`TOOL DOWNLOAD START: url=${sourceUrl} | format=${selectedFormat}`);
+
+    await ytDlp(sourceUrl, {
       output: `${baseFile}.%(ext)s`,
       format: selectedFormat,
       noPlaylist: true,
@@ -211,34 +327,82 @@ export const downloadTool = async (req, res) => {
     });
 
     const files = await fs.promises.readdir(TEMP_DIR);
-    const generatedFiles = files.filter((file) => file.startsWith(`download-${requestId}.`));
+    const generatedFiles = files.filter((file) =>
+      file.startsWith(`download-${requestId}.`)
+    );
 
     if (generatedFiles.length === 0) {
-      return res.status(500).json({ success: false, message: "Download output was not found." });
+      return res.status(500).json({
+        success: false,
+        message: "Download failed because the output file was not found.",
+      });
     }
 
     const preferred =
-      generatedFiles.find((file) => path.extname(file).toLowerCase() === ".mp4") || generatedFiles[0];
+      generatedFiles.find(
+        (file) => path.extname(file).toLowerCase() === ".mp4"
+      ) || generatedFiles[0];
 
     outputFile = path.join(TEMP_DIR, preferred);
     const stats = await fs.promises.stat(outputFile);
+
+    if (!stats.isFile() || stats.size <= 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Generated file is empty or corrupted.",
+      });
+    }
+
     const extension = path.extname(outputFile).toLowerCase() || ".mp4";
-    const title = cleanFileName(req.body?.title || "download");
-    const finalName = `${title}${extension}`;
+    const finalName = `${cleanBaseTitle}${extension}`;
 
     res.status(200);
-    res.setHeader("Content-Type", extension === ".mp4" ? "video/mp4" : "application/octet-stream");
+    res.setHeader(
+      "Content-Type",
+      extension === ".mp4"
+        ? "video/mp4"
+        : extension === ".webm"
+        ? "video/webm"
+        : "application/octet-stream"
+    );
     res.setHeader("Content-Length", stats.size);
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(finalName)}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(finalName)}"`
+    );
+    res.setHeader("Cache-Control", "no-store");
 
     const readStream = fs.createReadStream(outputFile);
-    readStream.on("close", () => removeFile(outputFile));
+
+    readStream.on("error", async (err) => {
+      logger.error(`Stream error: ${err.message}`);
+      await removeFile(outputFile);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed while streaming the file.",
+        });
+      }
+      res.destroy(err);
+    });
+
+    readStream.on("close", async () => {
+      await removeFile(outputFile);
+    });
+
     readStream.pipe(res);
   } catch (error) {
     if (outputFile) await removeFile(outputFile);
     const message = getYtDlpErrorMessage(error);
-    if (!res.headersSent) {
-      return res.status(500).json({ success: false, message });
+    logger.error(`TOOL DOWNLOAD ERROR: ${message}`);
+
+    if (res.headersSent) {
+      return res.destroy(error);
     }
+
+    return res.status(500).json({
+      success: false,
+      message,
+    });
   }
 };
