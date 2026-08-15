@@ -22,6 +22,15 @@ const BROWSER_HEADERS = {
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
 };
 
+// Reliable Invidious and Piped instances for stream extraction
+const YOUTUBE_API_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://invidious.tiekoetter.com",
+  "https://yt.artemislena.eu",
+  "https://invidious.f5.si",
+];
+
 const validateUrl = (value) => {
   if (!value || typeof value !== "string") return false;
   try {
@@ -209,7 +218,7 @@ const scrapePinterest = async (url) => {
 };
 
 /* =========================================================
-   2. INSTAGRAM ENGINE (MULTI-LEVEL SCRAPER)
+   2. INSTAGRAM ENGINE (REELS & PHOTOS)
 ========================================================= */
 
 const scrapeInstagram = async (url) => {
@@ -222,7 +231,7 @@ const scrapeInstagram = async (url) => {
     let imageUrl = null;
     let caption = "Instagram Media";
 
-    // Method A: Instagram Public GraphQL / Web API endpoint
+    // 1. GraphQL doc ID endpoint
     if (shortcode) {
       try {
         const gqlRes = await axios.get(
@@ -252,11 +261,11 @@ const scrapeInstagram = async (url) => {
           }
         }
       } catch (e) {
-        // Fallback to method B
+        // Fallback
       }
     }
 
-    // Method B: Instagram embed scraping
+    // 2. Embed Scraper
     if (!videoUrl && !imageUrl) {
       try {
         const embedUrl = `${cleanUrl}/embed/captioned/`;
@@ -301,7 +310,7 @@ const scrapeInstagram = async (url) => {
       }
     }
 
-    // Method C: OEmbed fallback for caption/image
+    // 3. OEmbed Meta
     if (!videoUrl && !imageUrl) {
       try {
         const oembedRes = await axios.get(
@@ -546,7 +555,7 @@ export const extractTool = async (req, res) => {
 };
 
 /* =========================================================
-   DOWNLOAD CONTROLLER
+   DOWNLOAD CONTROLLER (DIRECT BINARY STREAMING)
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
@@ -564,7 +573,7 @@ export const downloadTool = async (req, res) => {
     const platform = getPlatform(sourceUrl);
     const cleanBaseTitle = cleanFileName(title);
 
-    // 1. STREAM FOR MEDIA WITH DIRECT URLS (INSTAGRAM, PINTEREST, FACEBOOK)
+    // 1. RESOLVE STREAM URL FOR INSTAGRAM / PINTEREST / FACEBOOK
     let targetDirectUrl = directUrl;
 
     if (!targetDirectUrl && platform === "instagram") {
@@ -585,6 +594,14 @@ export const downloadTool = async (req, res) => {
       }
     }
 
+    if (!targetDirectUrl && platform === "facebook") {
+      const fbData = await scrapeFacebook(sourceUrl);
+      if (fbData?.formats?.[0]?.directUrl) {
+        targetDirectUrl = fbData.formats[0].directUrl;
+      }
+    }
+
+    // Direct Pipe for Instagram / Facebook / Pinterest
     if (targetDirectUrl && validateUrl(targetDirectUrl)) {
       try {
         const streamRes = await axios({
@@ -602,8 +619,8 @@ export const downloadTool = async (req, res) => {
           streamRes.headers["content-type"] ||
           (isPhoto ? "image/jpeg" : "video/mp4");
 
-        // Validate content type is actually an audio/video/image and not an HTML blocking page
-        if (!contentType.includes("text/html")) {
+        // Validate that we didn't receive an HTML error page
+        if (!contentType.toLowerCase().includes("text/html")) {
           let ext = isPhoto ? ".jpg" : ".mp4";
           if (contentType.includes("png")) ext = ".png";
           if (contentType.includes("webp")) ext = ".webp";
@@ -628,30 +645,67 @@ export const downloadTool = async (req, res) => {
       }
     }
 
-    // 2. YOUTUBE STANDARD MP4 REDIRECT STREAM (FIXES UNPLAYABLE / CORRUPTED FILES)
+    // 2. YOUTUBE STANDARD PROGRESSIVE STREAMING (AUDIO + VIDEO COMBINED MP4)
     if (platform === "youtube") {
       const videoId = extractYouTubeId(sourceUrl);
-      const chosenQuality = quality || 720;
-      
-      // Return high quality directly playable download stream
-      return res.status(200).json({
-        success: true,
-        downloadUrl: `https://api.vevioz.com/api/button/mp4/${videoId}`,
-        filename: `${cleanBaseTitle}.mp4`,
-        quality: chosenQuality,
-        size: 0,
-        isPhoto: false,
-      });
+      const reqQuality = Number(quality) || 720;
+
+      if (videoId) {
+        for (const instance of YOUTUBE_API_INSTANCES) {
+          try {
+            const apiRes = await axios.get(
+              `${instance}/api/v1/videos/${videoId}`,
+              {
+                headers: BROWSER_HEADERS,
+                timeout: 7000,
+              }
+            );
+
+            const formatStreams = apiRes.data?.formatStreams || [];
+            if (formatStreams.length > 0) {
+              // Match preferred quality or take the best available progressive MP4 stream
+              const selectedStream =
+                formatStreams.find((s) => Number(s.resolution?.replace("p", "")) === reqQuality) ||
+                formatStreams.find((s) => Number(s.resolution?.replace("p", "")) <= reqQuality) ||
+                formatStreams[0];
+
+              if (selectedStream?.url) {
+                const videoStream = await axios({
+                  method: "GET",
+                  url: selectedStream.url,
+                  responseType: "stream",
+                  timeout: 120000,
+                  headers: BROWSER_HEADERS,
+                });
+
+                const streamType = videoStream.headers["content-type"] || "video/mp4";
+                if (!streamType.toLowerCase().includes("text/html")) {
+                  const finalName = `${cleanBaseTitle}.mp4`;
+                  res.status(200);
+                  res.setHeader("Content-Type", "video/mp4");
+                  if (videoStream.headers["content-length"]) {
+                    res.setHeader("Content-Length", videoStream.headers["content-length"]);
+                  }
+                  res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="${encodeURIComponent(finalName)}"`
+                  );
+                  res.setHeader("Cache-Control", "no-store");
+
+                  return videoStream.data.pipe(res);
+                }
+              }
+            }
+          } catch (instanceErr) {
+            // Try next instance node
+          }
+        }
+      }
     }
 
-    // 3. FAILSAFE FAST DIRECT DOWNLOAD
-    return res.status(200).json({
-      success: true,
-      downloadUrl: sourceUrl,
-      filename: `${cleanBaseTitle}.${isPhoto ? "jpg" : "mp4"}`,
-      quality: quality || 720,
-      size: 0,
-      isPhoto: Boolean(isPhoto),
+    return res.status(404).json({
+      success: false,
+      message: "The requested media stream could not be extracted. Please try another link.",
     });
   } catch (error) {
     logger?.error?.(`DOWNLOAD ERROR: ${error.message}`);
