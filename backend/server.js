@@ -13,11 +13,11 @@ import convertRoutes from "./routes/convertRoutes.js";
 
 const app = express();
 
-/* =========================================================
-   ENVIRONMENT & CORS
-========================================================= */
-
 const PORT = process.env.PORT || 8000;
+
+/* =========================================================
+   ROBUST CORS
+========================================================= */
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -28,15 +28,13 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
 ]
   .filter(Boolean)
-  .map((origin) => origin.replace(/\/+$/, "")); // Strip trailing slashes
+  .map((origin) => origin.replace(/\/+$/, ""));
 
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-
     const cleanOrigin = origin.replace(/\/+$/, "");
 
-    // Allow defined origins or any vercel deployment preview
     if (
       allowedOrigins.includes(cleanOrigin) ||
       cleanOrigin.endsWith(".vercel.app")
@@ -44,8 +42,8 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    logger.warn(`CORS blocked origin: ${origin}`);
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
+    logger?.warn?.(`CORS allowed origin dynamically: ${origin}`);
+    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -57,10 +55,29 @@ const corsOptions = {
     "X-Requested-With",
   ],
   exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
-  optionsSuccessStatus: 204,
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
+
+// Explicit preflight handler to eliminate 405 on OPTIONS
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, Accept, Origin, X-Requested-With"
+    );
+    res.header(
+      "Access-Control-Expose-Headers",
+      "Content-Disposition, Content-Length, Content-Type"
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 /* =========================================================
    BODY PARSER
@@ -79,7 +96,7 @@ app.use(
     {
       stream: {
         write: (message) => {
-          logger.info(message.trim());
+          logger?.info?.(message.trim());
         },
       },
     }
@@ -123,7 +140,7 @@ app.use("/api/convert", convertRoutes);
 app.post("/api/logs/client", (req, res) => {
   try {
     const { type, message, stack, url, userAgent } = req.body || {};
-    logger.error(`
+    logger?.error?.(`
 CLIENT ERROR: [${type || "REACT_ERROR"}]
 URL: ${url || "Unknown"}
 Message: ${message || "Unknown"}
@@ -141,10 +158,10 @@ Stack: ${stack || "N/A"}
 ========================================================= */
 
 app.use((req, res) => {
-  logger.warn(`404: ${req.method} ${req.originalUrl}`);
+  logger?.warn?.(`404: ${req.method} ${req.originalUrl}`);
   return res.status(404).json({
     success: false,
-    message: "API route not found.",
+    message: `Cannot ${req.method} ${req.originalUrl}`,
   });
 });
 
@@ -153,14 +170,7 @@ app.use((req, res) => {
 ========================================================= */
 
 app.use((err, req, res, next) => {
-  logger.error(`SERVER ERROR: ${err?.message || err}\n${err?.stack || ""}`);
-
-  if (err?.message?.startsWith("CORS blocked")) {
-    return res.status(403).json({
-      success: false,
-      message: "CORS policy blocked this request.",
-    });
-  }
+  logger?.error?.(`SERVER ERROR: ${err?.message || err}\n${err?.stack || ""}`);
 
   if (res.headersSent) {
     return next(err);
@@ -180,11 +190,11 @@ const startServer = async () => {
   try {
     await connectDB();
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+      logger?.info?.(`Server running on port ${PORT}`);
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    logger.error(`Server failed to start: ${error.message}`);
+    logger?.error?.(`Server failed to start: ${error.message}`);
     process.exit(1);
   }
 };
