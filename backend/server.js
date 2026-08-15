@@ -14,46 +14,65 @@ import convertRoutes from "./routes/convertRoutes.js";
 const app = express();
 
 /* =========================================================
-   1. CORS CONFIGURATION (VERCEL & LOCALHOST SAFE)
+   ENVIRONMENT & CORS
 ========================================================= */
+
+const PORT = process.env.PORT || 8000;
+
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:3000",
   "http://localhost:5174",
+  "http://localhost:3000",
   "http://localhost:3001",
   "https://my-blogs-beige.vercel.app",
-  "https://my-blogs-beige.vercel.app/",
-];
+  process.env.FRONTEND_URL,
+]
+  .filter(Boolean)
+  .map((origin) => origin.replace(/\/+$/, "")); // Strip trailing slashes
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.endsWith(".vercel.app")
-      ) {
-        callback(null, true);
-      } else {
-        callback(null, true);
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
-  })
-);
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+
+    const cleanOrigin = origin.replace(/\/+$/, "");
+
+    // Allow defined origins or any vercel deployment preview
+    if (
+      allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.endsWith(".vercel.app")
+    ) {
+      return callback(null, true);
+    }
+
+    logger.warn(`CORS blocked origin: ${origin}`);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Accept",
+    "Origin",
+    "X-Requested-With",
+  ],
+  exposedHeaders: ["Content-Disposition", "Content-Length", "Content-Type"],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
 
 /* =========================================================
-   2. BODY PARSER
+   BODY PARSER
 ========================================================= */
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 /* =========================================================
-   3. HTTP REQUEST LOGGER
+   LOGGING (MORGAN)
 ========================================================= */
+
 app.use(
   morgan(
     ":remote-addr - :method :url :status :res[content-length] - :response-time ms",
@@ -68,75 +87,108 @@ app.use(
 );
 
 /* =========================================================
-   4. ROUTES
+   HEALTH CHECKS
 ========================================================= */
+
+app.get("/", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "API server is running.",
+    environment: process.env.NODE_ENV || "development",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/health", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Server is healthy.",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* =========================================================
+   API ROUTES
+========================================================= */
+
 app.use("/api/blogs", blogRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/tools", toolRoutes);
 app.use("/api/convert", convertRoutes);
 
 /* =========================================================
-   FRONTEND ERROR LOGGING
+   FRONTEND ERROR LOGGER
 ========================================================= */
+
 app.post("/api/logs/client", (req, res) => {
   try {
-    const { type, message, stack, componentStack, url, userAgent } = req.body;
-    logger.error(`CLIENT ERROR: ${type} - ${message} | URL: ${url} | UA: ${userAgent}`);
-    return res.status(200).json({ success: true, message: "Logged." });
-  } catch (error) {
+    const { type, message, stack, url, userAgent } = req.body || {};
+    logger.error(`
+CLIENT ERROR: [${type || "REACT_ERROR"}]
+URL: ${url || "Unknown"}
+Message: ${message || "Unknown"}
+User Agent: ${userAgent || "N/A"}
+Stack: ${stack || "N/A"}
+    `);
+    return res.status(200).json({ success: true });
+  } catch {
     return res.status(500).json({ success: false });
   }
 });
 
 /* =========================================================
-   5. HEALTH CHECK
+   404 HANDLER
 ========================================================= */
-app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "API server is running.",
-  });
-});
 
-/* =========================================================
-   6. 404 HANDLER
-========================================================= */
 app.use((req, res) => {
-  res.status(404).json({
+  logger.warn(`404: ${req.method} ${req.originalUrl}`);
+  return res.status(404).json({
     success: false,
     message: "API route not found.",
   });
 });
 
 /* =========================================================
-   7. ERROR HANDLER
+   GLOBAL ERROR HANDLER
 ========================================================= */
+
 app.use((err, req, res, next) => {
-  logger.error(`SERVER ERROR: ${err.message}\nStack: ${err.stack}`);
+  logger.error(`SERVER ERROR: ${err?.message || err}\n${err?.stack || ""}`);
+
+  if (err?.message?.startsWith("CORS blocked")) {
+    return res.status(403).json({
+      success: false,
+      message: "CORS policy blocked this request.",
+    });
+  }
+
   if (res.headersSent) {
     return next(err);
   }
-  res.status(err.status || 500).json({
+
+  return res.status(err?.status || 500).json({
     success: false,
-    message: err.message || "Internal server error.",
+    message: err?.message || "Internal server error.",
   });
 });
 
 /* =========================================================
-   8. START SERVER
+   START SERVER
 ========================================================= */
+
 const startServer = async () => {
   try {
     await connectDB();
-    const PORT = process.env.PORT || 8000;
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    logger.error(`Failed to start server: ${error.message}`);
+    logger.error(`Server failed to start: ${error.message}`);
     process.exit(1);
   }
 };
 
 startServer();
+
+export default app;
