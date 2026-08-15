@@ -63,20 +63,36 @@ const toolsData = [
   },
 ];
 
-const categories = ["All", "YouTube", "Facebook", "Instagram", "Pinterest"];
+const categories = [
+  "All",
+  "YouTube",
+  "Facebook",
+  "Instagram",
+  "Pinterest",
+];
+
+/* =========================================================
+   ONLY 360P + 720P
+========================================================= */
 
 const QUALITY_OPTIONS = [
   { value: 360, label: "360p" },
-  { value: 480, label: "480p" },
   { value: 720, label: "720p HD" },
-  { value: 1080, label: "1080p Full HD" },
 ];
+
+/* =========================================================
+   PLATFORM URL VALIDATION
+========================================================= */
 
 const validatePlatformUrl = (value, slug) => {
   try {
     if (!value?.trim()) return false;
+
     const parsed = new URL(value.trim());
-    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+
+    const hostname = parsed.hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
 
     if (slug === "youtube-video-downloader") {
       return (
@@ -86,6 +102,7 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".youtube.com")
       );
     }
+
     if (slug === "facebook-video-downloader") {
       return (
         hostname === "facebook.com" ||
@@ -94,6 +111,7 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".facebook.com")
       );
     }
+
     if (slug === "instagram-video-downloader") {
       return (
         hostname === "instagram.com" ||
@@ -101,6 +119,7 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".instagram.com")
       );
     }
+
     if (slug === "pinterest-downloader") {
       return (
         hostname === "pinterest.com" ||
@@ -109,32 +128,66 @@ const validatePlatformUrl = (value, slug) => {
         hostname.endsWith(".pinterest.com")
       );
     }
+
     return false;
   } catch {
     return false;
   }
 };
 
+/* =========================================================
+   FORMAT BYTES
+========================================================= */
+
 const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(Number(bytes))) return "Size unknown";
+  if (!bytes || Number.isNaN(Number(bytes))) {
+    return "Size unknown";
+  }
+
   const value = Number(bytes);
+
   if (value <= 0) return "Ready";
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
+
+/* =========================================================
+   FILENAME FROM HEADERS
+========================================================= */
 
 const getFilenameFromHeaders = (headers, fallback) => {
   try {
     const disposition = headers?.["content-disposition"];
+
     if (!disposition) return fallback;
 
-    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
+    const utfMatch = disposition.match(
+      /filename\*=UTF-8''([^;]+)/i
+    );
 
-    const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
-    if (normalMatch?.[1]) return decodeURIComponent(normalMatch[1]);
+    if (utfMatch?.[1]) {
+      return decodeURIComponent(utfMatch[1]);
+    }
+
+    const normalMatch = disposition.match(
+      /filename="?([^"]+)"?/i
+    );
+
+    if (normalMatch?.[1]) {
+      return decodeURIComponent(normalMatch[1]);
+    }
 
     return fallback;
   } catch {
@@ -142,8 +195,15 @@ const getFilenameFromHeaders = (headers, fallback) => {
   }
 };
 
+/* =========================================================
+   AXIOS ERROR MESSAGE
+========================================================= */
+
 const getAxiosErrorMessage = async (error) => {
-  if (error?.response?.data && !(error.response.data instanceof Blob)) {
+  if (
+    error?.response?.data &&
+    !(error.response.data instanceof Blob)
+  ) {
     return (
       error.response.data.message ||
       error.response.data.error ||
@@ -154,10 +214,16 @@ const getAxiosErrorMessage = async (error) => {
   if (error?.response?.data instanceof Blob) {
     try {
       const text = await error.response.data.text();
+
       if (text) {
         try {
           const json = JSON.parse(text);
-          return json?.message || json?.error || text;
+
+          return (
+            json?.message ||
+            json?.error ||
+            text
+          );
         } catch {
           return text;
         }
@@ -170,6 +236,7 @@ const getAxiosErrorMessage = async (error) => {
   if (error?.code === "ECONNABORTED") {
     return "Server request timed out. Please try again.";
   }
+
   return error?.message || "Something went wrong.";
 };
 
@@ -180,28 +247,51 @@ const getAxiosErrorMessage = async (error) => {
 function Tools() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+
   const [activeTool, setActiveTool] = useState(null);
+
   const [inputValue, setInputValue] = useState("");
+
   const [isExtracting, setIsExtracting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
   const [progress, setProgress] = useState(0);
+
   const [error, setError] = useState("");
+
   const [videoInfo, setVideoInfo] = useState(null);
-  const [selectedQuality, setSelectedQuality] = useState(null);
-  const [downloadResult, setDownloadResult] = useState(null);
+
+  const [selectedQuality, setSelectedQuality] =
+    useState(null);
+
+  const [downloadResult, setDownloadResult] =
+    useState(null);
+
+  /* =========================================================
+     FILTER TOOLS
+  ========================================================= */
 
   const filteredTools = useMemo(() => {
     const text = search.toLowerCase().trim();
+
     return toolsData.filter((tool) => {
       const matchesSearch =
         !text ||
         tool.name.toLowerCase().includes(text) ||
         tool.description.toLowerCase().includes(text) ||
         tool.category.toLowerCase().includes(text);
-      const matchesCategory = category === "All" || tool.category === category;
+
+      const matchesCategory =
+        category === "All" ||
+        tool.category === category;
+
       return matchesSearch && matchesCategory;
     });
   }, [search, category]);
+
+  /* =========================================================
+     OPEN TOOL
+  ========================================================= */
 
   const openTool = (tool) => {
     setActiveTool(tool);
@@ -215,15 +305,23 @@ function Tools() {
     setIsDownloading(false);
   };
 
+  /* =========================================================
+     CLOSE MODAL
+  ========================================================= */
+
   const closeModal = () => {
     if (isExtracting || isDownloading) return;
+
     if (downloadResult?.downloadUrl) {
       try {
-        window.URL.revokeObjectURL(downloadResult.downloadUrl);
+        window.URL.revokeObjectURL(
+          downloadResult.downloadUrl
+        );
       } catch {
         // Ignore
       }
     }
+
     setActiveTool(null);
     setInputValue("");
     setError("");
@@ -238,8 +336,10 @@ function Tools() {
   /* =========================================================
      EXTRACT MEDIA
   ========================================================= */
+
   const extractVideo = async (event) => {
     event.preventDefault();
+
     if (!activeTool) return;
 
     setError("");
@@ -249,14 +349,23 @@ function Tools() {
     setProgress(15);
 
     const cleanUrl = inputValue.trim();
+
     if (!cleanUrl) {
       setError("Please enter a URL.");
       setProgress(0);
       return;
     }
 
-    if (!validatePlatformUrl(cleanUrl, activeTool.slug)) {
-      setError(`Please enter a valid ${activeTool.category} URL.`);
+    if (
+      !validatePlatformUrl(
+        cleanUrl,
+        activeTool.slug
+      )
+    ) {
+      setError(
+        `Please enter a valid ${activeTool.category} URL.`
+      );
+
       setProgress(0);
       return;
     }
@@ -268,11 +377,15 @@ function Tools() {
         `${API_BASE_URL}/tools/extract`,
         {
           tool: activeTool.slug,
-          platform: activeTool.category.toLowerCase(),
+          platform:
+            activeTool.category.toLowerCase(),
           url: cleanUrl,
         },
         {
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
           timeout: 120000,
         }
       );
@@ -281,16 +394,26 @@ function Tools() {
 
       if (!response?.data?.success) {
         throw new Error(
-          response?.data?.message || "Unable to extract media information."
+          response?.data?.message ||
+            "Unable to extract media information."
         );
       }
 
-      const data = response.data.data || response.data;
+      const data =
+        response.data.data ||
+        response.data;
+
       if (!data) {
-        throw new Error("No media information returned by server.");
+        throw new Error(
+          "No media information returned by server."
+        );
       }
 
       setVideoInfo(data);
+
+      /* =====================================================
+         PHOTO
+      ===================================================== */
 
       if (data.isPhoto === true) {
         setSelectedQuality(null);
@@ -298,28 +421,66 @@ function Tools() {
         return;
       }
 
-      const availableFormats = Array.isArray(data.formats) ? data.formats : [];
-      const availableHeights = availableFormats
-        .map((item) => Number(item?.height))
-        .filter((h) => Number.isFinite(h) && h > 0);
+      /* =====================================================
+         VIDEO QUALITY
+         ONLY 360 / 720
+      ===================================================== */
 
-      const uniqueHeights = [...new Set(availableHeights)];
-      const preferredQuality = [720, 360, 480, 1080].find((q) =>
-        uniqueHeights.includes(q)
-      );
+      const availableFormats =
+        Array.isArray(data.formats)
+          ? data.formats
+          : [];
 
-      if (preferredQuality) {
-        setSelectedQuality(preferredQuality);
-      } else if (uniqueHeights.length > 0) {
-        setSelectedQuality(Math.max(...uniqueHeights));
-      } else {
+      const availableHeights =
+        availableFormats
+          .map((item) =>
+            Number(item?.height)
+          )
+          .filter(
+            (height) =>
+              Number.isFinite(height) &&
+              height > 0
+          );
+
+      const uniqueHeights = [
+        ...new Set(availableHeights),
+      ];
+
+      if (
+        uniqueHeights.includes(720)
+      ) {
         setSelectedQuality(720);
+      } else if (
+        uniqueHeights.includes(360)
+      ) {
+        setSelectedQuality(360);
+      } else if (
+        uniqueHeights.length > 0
+      ) {
+        const closest = uniqueHeights
+          .filter(
+            (height) =>
+              height <= 720
+          )
+          .sort((a, b) => b - a)[0];
+
+        setSelectedQuality(
+          closest || 360
+        );
+      } else {
+        setSelectedQuality(360);
       }
 
       setProgress(100);
     } catch (err) {
-      const message = await getAxiosErrorMessage(err);
-      setError(message || "Unable to extract media.");
+      const message =
+        await getAxiosErrorMessage(err);
+
+      setError(
+        message ||
+          "Unable to extract media."
+      );
+
       setProgress(0);
       setVideoInfo(null);
       setSelectedQuality(null);
@@ -329,14 +490,26 @@ function Tools() {
   };
 
   /* =========================================================
-     DOWNLOAD MEDIA (DUAL-MODE HANDLER)
+     DOWNLOAD MEDIA
   ========================================================= */
-  const downloadVideo = async () => {
-    if (!activeTool || !videoInfo || isDownloading || isExtracting) return;
 
-    const cleanUrl = inputValue.trim();
+  const downloadVideo = async () => {
+    if (
+      !activeTool ||
+      !videoInfo ||
+      isDownloading ||
+      isExtracting
+    ) {
+      return;
+    }
+
+    const cleanUrl =
+      inputValue.trim();
+
     if (!cleanUrl) {
-      setError("Original URL is missing.");
+      setError(
+        "Original URL is missing."
+      );
       return;
     }
 
@@ -345,131 +518,268 @@ function Tools() {
     setIsDownloading(true);
     setProgress(15);
 
-    const selectedFormat = Array.isArray(videoInfo.formats)
-      ? videoInfo.formats.find(
-          (f) => Number(f?.height) === Number(selectedQuality)
-        )
-      : null;
+    const selectedFormat =
+      Array.isArray(
+        videoInfo.formats
+      )
+        ? videoInfo.formats.find(
+            (format) =>
+              Number(format?.height) ===
+              Number(selectedQuality)
+          )
+        : null;
 
     const payload = {
       tool: activeTool.slug,
-      platform: activeTool.category.toLowerCase(),
+
+      platform:
+        activeTool.category.toLowerCase(),
+
       url: cleanUrl,
-      quality: selectedQuality || 720,
-      format: selectedQuality ? `${selectedQuality}p` : "720p",
-      formatId: selectedFormat?.formatId || String(selectedQuality || "720"),
-      title: videoInfo.title || `${activeTool.category}-media`,
-      isPhoto: Boolean(videoInfo.isPhoto),
-      directUrl: videoInfo.isPhoto
-        ? videoInfo.thumbnail || videoInfo.url
-        : selectedFormat?.directUrl || null,
+
+      quality:
+        selectedQuality || 360,
+
+      format: selectedQuality
+        ? `${selectedQuality}p`
+        : "360p",
+
+      formatId:
+        selectedFormat?.formatId ||
+        String(
+          selectedQuality || 360
+        ),
+
+      title:
+        videoInfo.title ||
+        `${activeTool.category}-media`,
+
+      isPhoto:
+        Boolean(videoInfo.isPhoto),
+
+      directUrl:
+        videoInfo.isPhoto
+          ? videoInfo.thumbnail ||
+            videoInfo.url
+          : selectedFormat?.directUrl ||
+            null,
     };
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/tools/download`,
-        payload,
-        {
-          headers: { "Content-Type": "application/json" },
-          responseType: "blob",
-          timeout: 120000,
-          onDownloadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percent = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setProgress(Math.min(percent, 99));
-            } else {
-              setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-            }
-          },
-        }
-      );
+      const response =
+        await axios.post(
+          `${API_BASE_URL}/tools/download`,
+          payload,
+          {
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-      const contentType = response.headers["content-type"] || "";
+            responseType: "blob",
 
-      // Check if backend returned JSON (e.g. direct high-speed download link)
-      if (contentType.includes("application/json")) {
-        const text = await response.data.text();
+            timeout: 120000,
+
+            onDownloadProgress:
+              (progressEvent) => {
+                if (
+                  progressEvent.total
+                ) {
+                  const percent =
+                    Math.round(
+                      (progressEvent.loaded *
+                        100) /
+                        progressEvent.total
+                    );
+
+                  setProgress(
+                    Math.min(
+                      percent,
+                      99
+                    )
+                  );
+                } else {
+                  setProgress(
+                    (prev) =>
+                      prev < 90
+                        ? prev + 5
+                        : prev
+                  );
+                }
+              },
+          }
+        );
+
+      const contentType =
+        response.headers[
+          "content-type"
+        ] || "";
+
+      /* =====================================================
+         JSON RESPONSE
+      ===================================================== */
+
+      if (
+        contentType.includes(
+          "application/json"
+        )
+      ) {
+        const text =
+          await response.data.text();
+
         let json = {};
+
         try {
-          json = JSON.parse(text);
-        } catch (e) {
+          json =
+            JSON.parse(text);
+        } catch {
           // Ignore
         }
 
         if (json.downloadUrl) {
           setProgress(100);
+
           setDownloadResult({
             success: true,
-            downloadUrl: json.downloadUrl,
-            filename: json.filename || `${activeTool.category.toLowerCase()}-video.mp4`,
-            quality: selectedQuality || 720,
-            size: json.size || 0,
-            isPhoto: false,
+            downloadUrl:
+              json.downloadUrl,
+
+            filename:
+              json.filename ||
+              `${activeTool.category.toLowerCase()}-video.mp4`,
+
+            quality:
+              selectedQuality || 360,
+
+            size:
+              json.size || 0,
+
+            isPhoto:
+              false,
           });
+
           return;
         }
 
-        throw new Error(json?.message || "Download failed. Please try another quality.");
+        throw new Error(
+          json?.message ||
+            "Download failed. Please try another quality."
+        );
       }
 
-      // Handle direct file blob
+      /* =====================================================
+         DIRECT FILE BLOB
+      ===================================================== */
+
       const blob =
         response.data instanceof Blob
           ? response.data
-          : new Blob([response.data], {
-              type: contentType || "application/octet-stream",
-            });
+          : new Blob(
+              [response.data],
+              {
+                type:
+                  contentType ||
+                  "application/octet-stream",
+              }
+            );
 
-      if (!blob || blob.size <= 0) {
-        throw new Error("Downloaded file is empty.");
+      if (
+        !blob ||
+        blob.size <= 0
+      ) {
+        throw new Error(
+          "Downloaded file is empty."
+        );
       }
 
       const isPhoto =
-        videoInfo?.isPhoto === true || contentType.includes("image/");
+        videoInfo?.isPhoto === true ||
+        contentType.includes(
+          "image/"
+        );
 
-      let fallbackExtension = isPhoto ? "jpg" : "mp4";
-      if (contentType.includes("png")) fallbackExtension = "png";
-      else if (contentType.includes("webp")) fallbackExtension = "webp";
+      let fallbackExtension =
+        isPhoto
+          ? "jpg"
+          : "mp4";
 
-      const defaultFilename = `${activeTool.category.toLowerCase()}-${
-        selectedQuality || "media"
-      }.${fallbackExtension}`;
+      if (
+        contentType.includes(
+          "png"
+        )
+      ) {
+        fallbackExtension = "png";
+      } else if (
+        contentType.includes(
+          "webp"
+        )
+      ) {
+        fallbackExtension = "webp";
+      } else if (
+        contentType.includes(
+          "webm"
+        )
+      ) {
+        fallbackExtension = "webm";
+      }
 
-      const filename = getFilenameFromHeaders(
-        response.headers,
-        defaultFilename
-      );
+      const defaultFilename =
+        `${activeTool.category.toLowerCase()}-${
+          selectedQuality || "media"
+        }.${fallbackExtension}`;
 
-      const downloadUrl = window.URL.createObjectURL(blob);
+      const filename =
+        getFilenameFromHeaders(
+          response.headers,
+          defaultFilename
+        );
+
+      const downloadUrl =
+        window.URL.createObjectURL(
+          blob
+        );
+
       setProgress(100);
 
       setDownloadResult({
         success: true,
         downloadUrl,
         filename,
-        quality: selectedQuality,
+        quality:
+          selectedQuality,
         size: blob.size,
         isPhoto,
       });
     } catch (err) {
-      const message = await getAxiosErrorMessage(err);
-      setError(message || "Unable to download file.");
+      const message =
+        await getAxiosErrorMessage(err);
+
+      setError(
+        message ||
+          "Unable to download file."
+      );
+
       setProgress(0);
     } finally {
       setIsDownloading(false);
     }
   };
 
+  /* =========================================================
+     PROCESS ANOTHER
+  ========================================================= */
+
   const processAnother = () => {
     if (downloadResult?.downloadUrl) {
       try {
-        window.URL.revokeObjectURL(downloadResult.downloadUrl);
+        window.URL.revokeObjectURL(
+          downloadResult.downloadUrl
+        );
       } catch {
         // Ignore
       }
     }
+
     setInputValue("");
     setVideoInfo(null);
     setSelectedQuality(null);
@@ -480,13 +790,31 @@ function Tools() {
     setIsDownloading(false);
   };
 
+  /* =========================================================
+     CHECK QUALITY
+  ========================================================= */
+
   const hasQuality = (quality) => {
-    if (!videoInfo || videoInfo.isPhoto) return false;
-    if (!Array.isArray(videoInfo.formats) || videoInfo.formats.length === 0) {
+    if (
+      !videoInfo ||
+      videoInfo.isPhoto
+    ) {
+      return false;
+    }
+
+    if (
+      !Array.isArray(
+        videoInfo.formats
+      ) ||
+      videoInfo.formats.length === 0
+    ) {
       return true;
     }
+
     return videoInfo.formats.some(
-      (item) => Number(item?.height) === Number(quality)
+      (item) =>
+        Number(item?.height) ===
+        Number(quality)
     );
   };
 
@@ -494,30 +822,46 @@ function Tools() {
     <div className="min-h-screen bg-[#090d16] font-sans text-slate-100 selection:bg-indigo-500/30 selection:text-white relative overflow-x-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-pink-600/20 blur-[120px] pointer-events-none rounded-full" />
 
-      {/* HERO SECTION */}
+      {/* =====================================================
+          HERO SECTION
+      ===================================================== */}
+
       <section className="relative pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight">
           Download Videos & Media
           <br className="hidden sm:block" />
+
           <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
-            {" "}Without Limits.
+            {" "}
+            Without Limits.
           </span>
         </h1>
 
         <p className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-slate-400 leading-relaxed">
-          Extract public videos and photos from YouTube, Facebook, Instagram, and Pinterest instantly.
+          Extract public videos and photos from
+          YouTube, Facebook, Instagram, and
+          Pinterest instantly.
         </p>
 
         {/* SEARCH BAR */}
+
         <div className="mt-10 max-w-xl mx-auto">
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition pointer-events-none" />
+
             <div className="relative flex items-center bg-[#131b2e] border border-slate-800 rounded-2xl shadow-xl overflow-hidden px-4 py-2">
-              <span className="text-lg mr-3 text-slate-400">🔍</span>
+              <span className="text-lg mr-3 text-slate-400">
+                🔍
+              </span>
+
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) =>
+                  setSearch(
+                    e.target.value
+                  )
+                }
                 placeholder="Search platforms or tools..."
                 className="w-full bg-transparent py-3 text-sm text-white placeholder-slate-500 outline-none"
               />
@@ -526,65 +870,86 @@ function Tools() {
         </div>
       </section>
 
-      {/* TOOLS GRID */}
+      {/* =====================================================
+          TOOLS GRID
+      ===================================================== */}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         <div className="flex items-center justify-center gap-2 overflow-x-auto pb-4 mb-10">
-          {categories.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setCategory(item)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-                category === item
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                  : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
+          {categories.map(
+            (item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() =>
+                  setCategory(item)
+                }
+                className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+                  category === item
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
+                    : "bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                {item}
+              </button>
+            )
+          )}
         </div>
 
-        {filteredTools.length > 0 ? (
+        {filteredTools.length >
+        0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTools.map((tool) => (
-              <div
-                key={tool.id}
-                className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
-                    >
-                      {tool.icon}
+            {filteredTools.map(
+              (tool) => (
+                <div
+                  key={tool.id}
+                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-7 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-6">
+                      <div
+                        className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center text-2xl font-black text-white`}
+                      >
+                        {tool.icon}
+                      </div>
+
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
+                      >
+                        {tool.category}
+                      </span>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${tool.badgeColor}`}
-                    >
-                      {tool.category}
-                    </span>
+
+                    <h3 className="text-xl font-bold text-white">
+                      {tool.name}
+                    </h3>
+
+                    <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
+                      {tool.description}
+                    </p>
                   </div>
-                  <h3 className="text-xl font-bold text-white">{tool.name}</h3>
-                  <p className="mt-2.5 text-sm leading-relaxed text-slate-400">
-                    {tool.description}
-                  </p>
+
+                  <div className="mt-8 pt-5 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openTool(tool)
+                      }
+                      className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
+                    >
+                      Launch Utility →
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-8 pt-5 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => openTool(tool)}
-                    className="w-full rounded-xl bg-slate-800 hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 px-4 py-3.5 text-sm font-bold text-white transition"
-                  >
-                    Launch Utility →
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         ) : (
           <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-16 text-center">
-            <h3 className="text-xl font-bold text-white">No tools found</h3>
+            <h3 className="text-xl font-bold text-white">
+              No tools found
+            </h3>
+
             <button
               type="button"
               onClick={() => {
@@ -599,13 +964,17 @@ function Tools() {
         )}
       </main>
 
-      {/* MODAL */}
+      {/* =====================================================
+          MODAL
+      ===================================================== */}
+
       {activeTool && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto"
           onMouseDown={(e) => {
             if (
-              e.target === e.currentTarget &&
+              e.target ===
+                e.currentTarget &&
               !isExtracting &&
               !isDownloading
             ) {
@@ -625,52 +994,84 @@ function Tools() {
                 >
                   {activeTool.icon}
                 </div>
+
                 <div>
-                  <h3 className="font-bold text-white">{activeTool.name}</h3>
+                  <h3 className="font-bold text-white">
+                    {activeTool.name}
+                  </h3>
+
                   <span className="text-xs text-slate-400">
-                    {activeTool.category} Engine
+                    {activeTool.category}{" "}
+                    Engine
                   </span>
                 </div>
               </div>
-              {!isExtracting && !isDownloading && (
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
-                >
-                  ✕
-                </button>
-              )}
+
+              {!isExtracting &&
+                !isDownloading && (
+                  <button
+                    type="button"
+                    onClick={
+                      closeModal
+                    }
+                    className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
+                  >
+                    ✕
+                  </button>
+                )}
             </div>
+
+            {/* ERROR */}
 
             {error && (
               <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
-                <strong className="block mb-1">Processing Failed</strong>
-                <span className="text-xs break-words">{error}</span>
+                <strong className="block mb-1">
+                  Processing Failed
+                </strong>
+
+                <span className="text-xs break-words">
+                  {error}
+                </span>
               </div>
             )}
+
+            {/* =================================================
+                DOWNLOAD RESULT
+            ================================================= */}
 
             {downloadResult?.success ? (
               <div className="py-8 text-center">
                 <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl text-emerald-400 mb-5">
                   ✓
                 </div>
+
                 <h4 className="text-xl font-bold text-white">
-                  {downloadResult.isPhoto ? "Photo Ready" : "Video Ready"}
+                  {downloadResult.isPhoto
+                    ? "Photo Ready"
+                    : "Video Ready"}
                 </h4>
+
                 <p className="mt-2 text-sm text-slate-400">
                   {downloadResult.isPhoto
                     ? "High Quality Photo"
                     : `${downloadResult.quality}p video`}{" "}
                   is ready.
                 </p>
+
                 <p className="mt-1 text-xs text-slate-500">
-                  File status: {formatBytes(downloadResult.size)}
+                  File status:{" "}
+                  {formatBytes(
+                    downloadResult.size
+                  )}
                 </p>
 
                 <a
-                  href={downloadResult.downloadUrl}
-                  download={downloadResult.filename}
+                  href={
+                    downloadResult.downloadUrl
+                  }
+                  download={
+                    downloadResult.filename
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4 text-sm font-bold text-white hover:from-emerald-400 hover:to-teal-500 transition shadow-lg shadow-emerald-500/20"
@@ -680,7 +1081,9 @@ function Tools() {
 
                 <button
                   type="button"
-                  onClick={processAnother}
+                  onClick={
+                    processAnother
+                  }
                   className="mt-3 w-full rounded-2xl border border-slate-700 bg-slate-800/50 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
                 >
                   Process Another Link
@@ -688,56 +1091,84 @@ function Tools() {
               </div>
             ) : videoInfo ? (
               <div className="mt-6">
+                {/* =================================================
+                    VIDEO INFO
+                ================================================= */}
+
                 <div className="rounded-2xl border border-slate-800 bg-[#0c1322] p-4">
                   <div className="flex gap-4">
                     {videoInfo.thumbnail && (
                       <img
-                        src={videoInfo.thumbnail}
+                        src={
+                          videoInfo.thumbnail
+                        }
                         alt="Thumbnail"
                         className="w-32 h-20 object-cover rounded-xl flex-shrink-0"
                         onError={(e) => {
-                          e.currentTarget.style.display = "none";
+                          e.currentTarget.style.display =
+                            "none";
                         }}
                       />
                     )}
+
                     <div className="min-w-0">
                       <h4 className="font-bold text-white line-clamp-2">
-                        {videoInfo.title || "Media"}
+                        {videoInfo.title ||
+                          "Media"}
                       </h4>
+
                       {videoInfo.uploader && (
                         <p className="mt-1 text-xs text-slate-500">
-                          By: {videoInfo.uploader}
+                          By:{" "}
+                          {
+                            videoInfo.uploader
+                          }
                         </p>
                       )}
+
                       {videoInfo.platform && (
                         <p className="mt-1 text-xs text-slate-600 capitalize">
-                          Platform: {videoInfo.platform}
+                          Platform:{" "}
+                          {
+                            videoInfo.platform
+                          }
                         </p>
                       )}
                     </div>
                   </div>
                 </div>
 
+                {/* =================================================
+                    PHOTO
+                ================================================= */}
+
                 {videoInfo.isPhoto ? (
                   <div className="mt-6">
                     <div className="rounded-2xl border border-slate-800 bg-slate-800/30 p-5 text-center">
                       <p className="text-sm text-slate-400">
-                        High resolution photo is ready to download.
+                        High resolution photo
+                        is ready to download.
                       </p>
                     </div>
 
                     {isDownloading && (
                       <div className="mt-6">
                         <div className="flex justify-between text-xs mb-2">
-                          <span className="text-slate-400">Downloading...</span>
+                          <span className="text-slate-400">
+                            Downloading...
+                          </span>
+
                           <span className="text-indigo-400 font-bold">
                             {progress}%
                           </span>
                         </div>
+
                         <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
-                            style={{ width: `${progress}%` }}
+                            style={{
+                              width: `${progress}%`,
+                            }}
                           />
                         </div>
                       </div>
@@ -746,129 +1177,227 @@ function Tools() {
                     <div className="mt-7 flex gap-3">
                       <button
                         type="button"
-                        disabled={isDownloading}
-                        onClick={processAnother}
+                        disabled={
+                          isDownloading
+                        }
+                        onClick={
+                          processAnother
+                        }
                         className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-3.5 text-sm font-semibold text-slate-300 disabled:opacity-50"
                       >
                         Change URL
                       </button>
+
                       <button
                         type="button"
-                        disabled={isDownloading}
-                        onClick={downloadVideo}
+                        disabled={
+                          isDownloading
+                        }
+                        onClick={
+                          downloadVideo
+                        }
                         className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3.5 text-sm font-bold text-white disabled:opacity-50"
                       >
-                        {isDownloading ? "Downloading..." : "Download Photo"}
+                        {isDownloading
+                          ? "Downloading..."
+                          : "Download Photo"}
                       </button>
                     </div>
                   </div>
                 ) : (
+                  /* =================================================
+                     VIDEO QUALITY
+                  ================================================= */
+
                   <div className="mt-6">
                     <h4 className="font-bold text-white mb-3">
                       Select Video Quality
                     </h4>
+
                     <div className="grid grid-cols-2 gap-3">
-                      {QUALITY_OPTIONS.map((quality) => {
-                        const available = hasQuality(quality.value);
-                        const selected =
-                          Number(selectedQuality) === Number(quality.value);
-                        return (
-                          <button
-                            key={quality.value}
-                            type="button"
-                            disabled={isDownloading || !available}
-                            onClick={() => setSelectedQuality(quality.value)}
-                            className={`relative rounded-2xl border p-4 text-left transition ${
-                              selected
-                                ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20"
-                                : available
-                                ? "border-slate-700 bg-slate-800/40 hover:border-indigo-500/50"
-                                : "border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-white">
-                                {quality.label}
-                              </span>
-                              {selected && (
-                                <span className="text-indigo-400">✓</span>
+                      {QUALITY_OPTIONS.map(
+                        (quality) => {
+                          const available =
+                            hasQuality(
+                              quality.value
+                            );
+
+                          const selected =
+                            Number(
+                              selectedQuality
+                            ) ===
+                            Number(
+                              quality.value
+                            );
+
+                          return (
+                            <button
+                              key={
+                                quality.value
+                              }
+                              type="button"
+                              disabled={
+                                isDownloading ||
+                                !available
+                              }
+                              onClick={() =>
+                                setSelectedQuality(
+                                  quality.value
+                                )
+                              }
+                              className={`relative rounded-2xl border p-4 text-left transition ${
+                                selected
+                                  ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20"
+                                  : available
+                                  ? "border-slate-700 bg-slate-800/40 hover:border-indigo-500/50"
+                                  : "border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-white">
+                                  {
+                                    quality.label
+                                  }
+                                </span>
+
+                                {selected && (
+                                  <span className="text-indigo-400">
+                                    ✓
+                                  </span>
+                                )}
+                              </div>
+
+                              {!available && (
+                                <span className="mt-1 block text-[10px] text-slate-600">
+                                  Not available
+                                </span>
                               )}
-                            </div>
-                            {!available && (
-                              <span className="mt-1 block text-[10px] text-slate-600">
-                                Not available
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                            </button>
+                          );
+                        }
+                      )}
                     </div>
                   </div>
                 )}
 
-                {isDownloading && !videoInfo.isPhoto && (
-                  <div className="mt-6">
-                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-slate-400">Downloading...</span>
-                      <span className="text-indigo-400 font-bold">
-                        {progress}%
-                      </span>
+                {/* =================================================
+                    DOWNLOAD PROGRESS
+                ================================================= */}
+
+                {isDownloading &&
+                  !videoInfo.isPhoto && (
+                    <div className="mt-6">
+                      <div className="flex justify-between text-xs mb-2">
+                        <span className="text-slate-400">
+                          Downloading...
+                        </span>
+
+                        <span className="text-indigo-400 font-bold">
+                          {progress}%
+                        </span>
+                      </div>
+
+                      <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
+                          style={{
+                            width: `${progress}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+                  )}
+
+                {/* =================================================
+                    VIDEO BUTTONS
+                ================================================= */}
 
                 {!videoInfo.isPhoto && (
                   <div className="mt-7 flex gap-3">
                     <button
                       type="button"
-                      disabled={isDownloading}
-                      onClick={processAnother}
+                      disabled={
+                        isDownloading
+                      }
+                      onClick={
+                        processAnother
+                      }
                       className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50"
                     >
                       Change URL
                     </button>
+
                     <button
                       type="button"
-                      disabled={!selectedQuality || isDownloading}
-                      onClick={downloadVideo}
+                      disabled={
+                        !selectedQuality ||
+                        isDownloading
+                      }
+                      onClick={
+                        downloadVideo
+                      }
                       className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3.5 text-sm font-bold text-white disabled:opacity-50"
                     >
-                      {isDownloading ? "Downloading..." : "Download Now"}
+                      {isDownloading
+                        ? "Downloading..."
+                        : "Download Now"}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <form onSubmit={extractVideo} className="mt-6 space-y-5">
+              /* =================================================
+                 INPUT FORM
+              ================================================= */
+
+              <form
+                onSubmit={
+                  extractVideo
+                }
+                className="mt-6 space-y-5"
+              >
                 <p className="text-sm leading-relaxed text-slate-400">
-                  Paste the public {activeTool.category} link below to extract available download options.
+                  Paste the public{" "}
+                  {activeTool.category}{" "}
+                  link below to extract
+                  available download options.
                 </p>
 
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Target {activeTool.category} URL
+                    Target{" "}
+                    {
+                      activeTool.category
+                    }{" "}
+                    URL
                   </label>
+
                   <input
                     type="url"
                     required
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    value={
+                      inputValue
+                    }
+                    onChange={(e) =>
+                      setInputValue(
+                        e.target.value
+                      )
+                    }
                     placeholder={
-                      activeTool.category === "YouTube"
+                      activeTool.category ===
+                      "YouTube"
                         ? "https://youtube.com/watch?v=..."
-                        : activeTool.category === "Facebook"
+                        : activeTool.category ===
+                          "Facebook"
                         ? "https://facebook.com/..."
-                        : activeTool.category === "Instagram"
+                        : activeTool.category ===
+                          "Instagram"
                         ? "https://instagram.com/reel/..."
                         : "https://pinterest.com/pin/..."
                     }
-                    disabled={isExtracting}
+                    disabled={
+                      isExtracting
+                    }
                     className="w-full rounded-2xl border border-slate-800 bg-[#0c1322] px-4 py-3.5 text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
@@ -879,14 +1408,18 @@ function Tools() {
                       <span className="text-slate-400">
                         Extracting details...
                       </span>
+
                       <span className="text-indigo-400 font-bold">
                         {progress}%
                       </span>
                     </div>
+
                     <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
-                        style={{ width: `${progress}%` }}
+                        style={{
+                          width: `${progress}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -895,18 +1428,28 @@ function Tools() {
                 <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                   <button
                     type="button"
-                    disabled={isExtracting}
-                    onClick={closeModal}
+                    disabled={
+                      isExtracting
+                    }
+                    onClick={
+                      closeModal
+                    }
                     className="rounded-xl px-5 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800 disabled:opacity-50"
                   >
                     Cancel
                   </button>
+
                   <button
                     type="submit"
-                    disabled={isExtracting || !inputValue.trim()}
+                    disabled={
+                      isExtracting ||
+                      !inputValue.trim()
+                    }
                     className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    {isExtracting ? "Extracting..." : "Extract Media"}
+                    {isExtracting
+                      ? "Extracting..."
+                      : "Extract Media"}
                   </button>
                 </div>
               </form>
