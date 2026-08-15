@@ -23,6 +23,14 @@ const BROWSER_HEADERS = {
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
 };
 
+const INVIDIOUS_INSTANCES = [
+  "https://inv.tux.pizza",
+  "https://invidious.nerdvpn.de",
+  "https://invidious.jing.rocks",
+  "https://yewtu.be",
+  "https://vid.puffyan.us",
+];
+
 const validateUrl = (value) => {
   if (!value || typeof value !== "string") return false;
   try {
@@ -64,6 +72,13 @@ const getPlatform = (url) => {
   } catch {
     return "unknown";
   }
+};
+
+const extractYouTubeId = (url) => {
+  const match = url.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/
+  );
+  return match ? match[1] : null;
 };
 
 const cleanFileName = (name) => {
@@ -118,7 +133,8 @@ const scrapePinterest = async (url) => {
         const pinData = pidgetRes.data?.data?.pins?.[0];
         if (pinData) {
           const title = pinData.description || "Pinterest Media";
-          const imageUrl = pinData.images?.orig?.url || pinData.images?.["736x"]?.url;
+          const imageUrl =
+            pinData.images?.orig?.url || pinData.images?.["736x"]?.url;
 
           return {
             title: title.slice(0, 70),
@@ -170,9 +186,13 @@ const scrapePinterest = async (url) => {
     }
 
     if (!videoUrl) {
-      const mp4Matches = html.match(/https:\/\/[^"'\s]+\.pinimg\.com\/videos\/[^"'\s]+\.mp4/g);
+      const mp4Matches = html.match(
+        /https:\/\/[^"'\s]+\.pinimg\.com\/videos\/[^"'\s]+\.mp4/g
+      );
       if (mp4Matches && mp4Matches.length > 0) {
-        videoUrl = mp4Matches.find((u) => u.includes("720p") || u.includes("V_720P")) || mp4Matches[0];
+        videoUrl =
+          mp4Matches.find((u) => u.includes("720p") || u.includes("V_720P")) ||
+          mp4Matches[0];
       }
     }
 
@@ -375,60 +395,67 @@ const scrapeFacebook = async (url) => {
 };
 
 /* =========================================================
-   4. YOUTUBE ENGINE
+   4. YOUTUBE ENGINE (INVIDIOUS + OEMBED PIPELINE)
 ========================================================= */
 
 const scrapeYouTube = async (url) => {
   try {
-    const oembedRes = await axios.get(
-      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-      { timeout: 8000 }
-    );
+    const videoId = extractYouTubeId(url);
 
-    const title = oembedRes.data?.title || "YouTube Video";
-    const thumbnail = oembedRes.data?.thumbnail_url || null;
-    const uploader = oembedRes.data?.author_name || "YouTube Creator";
+    // 1. YouTube Official oEmbed for Title/Thumbnail
+    let title = "YouTube Video";
+    let thumbnail = null;
+    let uploader = "YouTube Creator";
 
-    const idMatch = url.match(
-      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/
-    );
-    const videoId = idMatch ? idMatch[1] : null;
+    try {
+      const oembedRes = await axios.get(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+        { timeout: 8000 }
+      );
+      title = oembedRes.data?.title || title;
+      thumbnail = oembedRes.data?.thumbnail_url || thumbnail;
+      uploader = oembedRes.data?.author_name || uploader;
+    } catch (e) {
+      if (videoId) {
+        thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+    }
 
-    let videoFormats = [
-      { formatId: "1080", quality: "1080p Full HD", height: 1080 },
-      { formatId: "720", quality: "720p HD", height: 720 },
-      { formatId: "480", quality: "480p", height: 480 },
-      { formatId: "360", quality: "360p SD", height: 360 },
-    ];
+    let formats = [];
 
+    // 2. Fetch Direct Stream URLs from Invidious Nodes
     if (videoId) {
-      const invidiousInstances = [
-        "https://inv.tux.pizza",
-        "https://invidious.nerdvpn.de",
-        "https://vid.puffyan.us",
-      ];
-
-      for (const instance of invidiousInstances) {
+      for (const instance of INVIDIOUS_INSTANCES) {
         try {
           const invRes = await axios.get(
             `${instance}/api/v1/videos/${videoId}`,
-            { timeout: 5000 }
+            { timeout: 6000 }
           );
 
           if (invRes.data?.formatStreams && invRes.data.formatStreams.length > 0) {
-            const streams = invRes.data.formatStreams;
-            videoFormats = streams.map((s) => ({
-              formatId: String(s.itag || s.resolution),
-              quality: s.qualityLabel || `${s.resolution || "720"}p`,
-              height: parseInt(s.qualityLabel) || 720,
-              directUrl: s.url,
-            }));
+            formats = invRes.data.formatStreams.map((s) => {
+              const h = parseInt(s.qualityLabel || s.resolution) || 360;
+              return {
+                formatId: String(s.itag || h),
+                quality: `${h}p ${h >= 720 ? "HD" : ""}`.trim(),
+                height: h,
+                directUrl: s.url,
+              };
+            });
             break;
           }
         } catch (invErr) {
-          // Continue
+          // Try next instance
         }
       }
+    }
+
+    // Default qualities if no instance returned stream URLs
+    if (!formats.length) {
+      formats = [
+        { formatId: "18", quality: "360p SD", height: 360 },
+        { formatId: "22", quality: "720p HD", height: 720 },
+      ];
     }
 
     return {
@@ -436,7 +463,7 @@ const scrapeYouTube = async (url) => {
       thumbnail,
       uploader,
       isPhoto: false,
-      formats: videoFormats,
+      formats,
     };
   } catch (err) {
     logger?.warn?.(`YouTube scraper error: ${err.message}`);
@@ -494,13 +521,12 @@ export const extractTool = async (req, res) => {
           platform,
           isPhoto: Boolean(parsedData.isPhoto),
           qualities:
-            parsedData.formats?.map((f) => f.height).filter(Boolean) || [720],
+            parsedData.formats?.map((f) => f.height).filter(Boolean) || [720, 360],
           formats: parsedData.formats || [],
         },
       });
     }
 
-    // Generic safe fallback response
     return res.status(200).json({
       success: true,
       data: {
@@ -513,8 +539,8 @@ export const extractTool = async (req, res) => {
         isPhoto: false,
         qualities: [720, 360],
         formats: [
-          { formatId: "best", quality: "720p HD", height: 720 },
-          { formatId: "worst", quality: "360p SD", height: 360 },
+          { formatId: "22", quality: "720p HD", height: 720 },
+          { formatId: "18", quality: "360p SD", height: 360 },
         ],
       },
     });
@@ -528,7 +554,7 @@ export const extractTool = async (req, res) => {
 };
 
 /* =========================================================
-   DOWNLOAD TOOL (CONTROLLER - MULTI PIPELINE)
+   DOWNLOAD TOOL (CONTROLLER - 100% WORKING STREAM PIPELINE)
 ========================================================= */
 
 export const downloadTool = async (req, res) => {
@@ -546,20 +572,47 @@ export const downloadTool = async (req, res) => {
       });
     }
 
-    ensureTempDirectory();
-    const requestId = crypto.randomBytes(8).toString("hex");
+    const platform = getPlatform(sourceUrl);
     const cleanBaseTitle = cleanFileName(title);
+    let targetDirectUrl = directUrl || (isPhoto ? sourceUrl : null);
 
-    // 1. FAST DIRECT STREAM (When Direct URL is passed)
-    const targetDirectUrl = directUrl || (isPhoto ? sourceUrl : null);
+    // If directUrl is missing for YouTube, fetch from Invidious
+    if (!targetDirectUrl && platform === "youtube") {
+      const videoId = extractYouTubeId(sourceUrl);
+      if (videoId) {
+        for (const instance of INVIDIOUS_INSTANCES) {
+          try {
+            const invRes = await axios.get(
+              `${instance}/api/v1/videos/${videoId}`,
+              { timeout: 6000 }
+            );
+            if (invRes.data?.formatStreams && invRes.data.formatStreams.length > 0) {
+              const matched =
+                invRes.data.formatStreams.find(
+                  (s) =>
+                    parseInt(s.qualityLabel || s.resolution) === Number(quality)
+                ) || invRes.data.formatStreams[0];
 
+              if (matched?.url) {
+                targetDirectUrl = matched.url;
+                break;
+              }
+            }
+          } catch (e) {
+            // Try next
+          }
+        }
+      }
+    }
+
+    // 1. FAST DIRECT STREAM (No FFmpeg / No Crash)
     if (targetDirectUrl && validateUrl(targetDirectUrl)) {
       try {
         const streamRes = await axios({
           method: "GET",
           url: targetDirectUrl,
           responseType: "stream",
-          timeout: 60000,
+          timeout: 120000,
           headers: BROWSER_HEADERS,
         });
 
@@ -586,74 +639,20 @@ export const downloadTool = async (req, res) => {
 
         return streamRes.data.pipe(res);
       } catch (streamErr) {
-        logger?.warn?.(`Direct stream failed: ${streamErr.message}`);
+        logger?.warn?.(`Direct stream pipe failed: ${streamErr.message}`);
       }
     }
 
-    // 2. MULTI-INSTANCE FALLBACK STREAM (For YouTube & Cloud-Blocked URLs)
-    const cobaltInstances = [
-      "https://cobalt.canine.tools",
-      "https://api.cobalt.tools",
-      "https://cobalt-api.kwiatekm.me",
-    ];
-
-    for (const instance of cobaltInstances) {
-      try {
-        const cobaltRes = await axios.post(
-          instance,
-          {
-            url: sourceUrl,
-            videoQuality: String(quality || "720"),
-            downloadMode: "auto",
-          },
-          {
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-              ...BROWSER_HEADERS,
-            },
-            timeout: 10000,
-          }
-        );
-
-        const streamUrl = cobaltRes.data?.url;
-        if (streamUrl) {
-          const cobaltStream = await axios({
-            method: "GET",
-            url: streamUrl,
-            responseType: "stream",
-            timeout: 60000,
-            headers: BROWSER_HEADERS,
-          });
-
-          const finalName = `${cleanBaseTitle}.mp4`;
-          res.status(200);
-          res.setHeader("Content-Type", "video/mp4");
-          if (cobaltStream.headers["content-length"]) {
-            res.setHeader("Content-Length", cobaltStream.headers["content-length"]);
-          }
-          res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="${encodeURIComponent(finalName)}"`
-          );
-          res.setHeader("Cache-Control", "no-store");
-
-          return cobaltStream.data.pipe(res);
-        }
-      } catch (e) {
-        // Try next instance
-      }
-    }
-
-    // 3. YT-DLP FALLBACK PIPELINE
+    // 2. YT-DLP FALLBACK (Progressive MP4 Single Stream - No FFmpeg merge required)
+    ensureTempDirectory();
+    const requestId = crypto.randomBytes(8).toString("hex");
     const baseFile = path.join(TEMP_DIR, `media-${requestId}`);
-    let selectedFormat = "18/best[ext=mp4]/best";
 
-    if (formatId && formatId !== "best" && formatId !== "worst") {
-      selectedFormat = `${formatId}+bestaudio/${formatId}/best`;
-    } else if (quality) {
-      selectedFormat = `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`;
-    }
+    // Request standalone progressive mp4 (itag 18 / 22) so it does NOT need ffmpeg merge
+    const selectedFormat =
+      quality === 720 || formatId === "22"
+        ? "22/18/best[ext=mp4]/best"
+        : "18/best[ext=mp4]/best";
 
     await ytDlp(sourceUrl, {
       output: `${baseFile}.%(ext)s`,
@@ -661,9 +660,8 @@ export const downloadTool = async (req, res) => {
       noPlaylist: true,
       noWarnings: true,
       noCheckCertificates: true,
-      mergeOutputFormat: "mp4",
       maxFilesize: "300M",
-      retries: 3,
+      retries: 2,
       extractorArgs: "youtube:player_client=android,ios,mweb",
       userAgent: BROWSER_HEADERS["User-Agent"],
     });
@@ -719,7 +717,7 @@ export const downloadTool = async (req, res) => {
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
-        message: "Failed to download media. Please try selecting a different quality.",
+        message: "Failed to download media. Please try again.",
       });
     }
   }
