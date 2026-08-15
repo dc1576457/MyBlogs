@@ -4,12 +4,15 @@ import path from "path";
 import crypto from "crypto";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import youtubedl from "youtube-dl-exec";
+
 import { logger } from "../utils/logger.js";
 
-const TEMP_DIR = path.join(
-  os.tmpdir(),
-  "myblog-tools"
-);
+/* =========================================================
+   CONFIG
+========================================================= */
+
+const TEMP_DIR = path.join(os.tmpdir(), "myblog-tools");
 
 const ensureTempDirectory = () => {
   if (!fs.existsSync(TEMP_DIR)) {
@@ -18,6 +21,8 @@ const ensureTempDirectory = () => {
     });
   }
 };
+
+ensureTempDirectory();
 
 /* =========================================================
    BROWSER HEADERS
@@ -32,36 +37,21 @@ const BROWSER_HEADERS = {
 
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+
+  Connection: "keep-alive",
 };
-
-/* =========================================================
-   INVIDIOUS INSTANCES
-========================================================= */
-
-const INVIDIOUS_INSTANCES = [
-  "https://inv.tux.pizza",
-  "https://invidious.nerdvpn.de",
-  "https://invidious.jing.rocks",
-  "https://yewtu.be",
-  "https://vid.puffyan.us",
-];
 
 /* =========================================================
    URL VALIDATION
 ========================================================= */
 
 const validateUrl = (value) => {
-  if (
-    !value ||
-    typeof value !== "string"
-  ) {
+  if (!value || typeof value !== "string") {
     return false;
   }
 
   try {
-    const parsed = new URL(
-      value.trim()
-    );
+    const parsed = new URL(value.trim());
 
     return (
       parsed.protocol === "http:" ||
@@ -73,7 +63,7 @@ const validateUrl = (value) => {
 };
 
 /* =========================================================
-   PLATFORM
+   PLATFORM DETECTION
 ========================================================= */
 
 const getPlatform = (url) => {
@@ -83,31 +73,51 @@ const getPlatform = (url) => {
       .toLowerCase()
       .replace(/^www\./, "");
 
+    /* =========================
+       YOUTUBE
+    ========================= */
+
     if (
       hostname === "youtube.com" ||
+      hostname === "m.youtube.com" ||
       hostname === "youtu.be" ||
       hostname.endsWith(".youtube.com")
     ) {
       return "youtube";
     }
 
+    /* =========================
+       FACEBOOK
+    ========================= */
+
     if (
       hostname === "facebook.com" ||
+      hostname === "m.facebook.com" ||
       hostname === "fb.watch" ||
       hostname.endsWith(".facebook.com")
     ) {
       return "facebook";
     }
 
+    /* =========================
+       INSTAGRAM
+    ========================= */
+
     if (
       hostname === "instagram.com" ||
+      hostname === "m.instagram.com" ||
       hostname.endsWith(".instagram.com")
     ) {
       return "instagram";
     }
 
+    /* =========================
+       PINTEREST
+    ========================= */
+
     if (
       hostname === "pinterest.com" ||
+      hostname === "m.pinterest.com" ||
       hostname === "pin.it" ||
       hostname.endsWith(".pinterest.com")
     ) {
@@ -129,33 +139,27 @@ const extractYouTubeId = (url) => {
     const parsed = new URL(url);
 
     if (
-      parsed.hostname
-        .replace(/^www\./, "")
-        .toLowerCase() ===
-      "youtu.be"
+      parsed.hostname === "youtu.be" ||
+      parsed.hostname === "www.youtu.be"
     ) {
       return (
         parsed.pathname
-          .replace("/", "")
-          .slice(0, 11) || null
+          .replace(/^\/+/, "")
+          .split("/")[0] || null
       );
     }
 
-    const v =
-      parsed.searchParams.get("v");
+    const videoId = parsed.searchParams.get("v");
 
-    if (v) {
-      return v.slice(0, 11);
+    if (videoId) {
+      return videoId;
     }
 
-    const match =
-      parsed.pathname.match(
-        /\/(?:shorts|embed|v)\/([^/?]+)/i
-      );
+    const match = parsed.pathname.match(
+      /\/(?:shorts|embed|v)\/([^/?&]+)/
+    );
 
-    return match
-      ? match[1].slice(0, 11)
-      : null;
+    return match?.[1] || null;
   } catch {
     return null;
   }
@@ -166,229 +170,106 @@ const extractYouTubeId = (url) => {
 ========================================================= */
 
 const cleanFileName = (name) => {
-  return String(
-    name || "download"
-  )
-    .replace(
-      /[<>:"/\\|?*\x00-\x1F]/g,
-      ""
-    )
+  return String(name || "download")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);
 };
 
 /* =========================================================
-   SAFE URL DECODE
+   QUALITY NORMALIZER
+========================================================= */
+
+const normalizeQuality = (quality) => {
+  const number = Number(quality);
+
+  if (number === 360) {
+    return 360;
+  }
+
+  if (number === 720) {
+    return 720;
+  }
+
+  return 720;
+};
+
+/* =========================================================
+   SAFE URL DECODER
 ========================================================= */
 
 const decodeMediaUrl = (value) => {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
 
   try {
-    let result = String(value);
-
-    result = result.replace(
-      /\\u0026/g,
-      "&"
-    );
-
-    result = result.replace(
-      /\\u003D/g,
-      "="
-    );
-
-    result = result.replace(
-      /\\\//g,
-      "/"
-    );
-
-    result = result.replace(
-      /\\"/g,
-      '"'
-    );
-
-    result = decodeURIComponent(
-      result
-    );
-
-    return result;
+    return JSON.parse(`"${value}"`);
   } catch {
-    return value;
+    return String(value)
+      .replace(/\\u0026/g, "&")
+      .replace(/\\u003D/g, "=")
+      .replace(/\\u002F/g, "/")
+      .replace(/\\\//g, "/")
+      .replace(/\\"/g, '"');
   }
 };
 
 /* =========================================================
-   1. PINTEREST ENGINE
+   PINTEREST ENGINE
 ========================================================= */
 
 const scrapePinterest = async (url) => {
   try {
     let targetUrl = url;
 
-    /*
-      Resolve pin.it redirect
-    */
+    /* Resolve pin.it */
 
-    if (
-      url.includes("pin.it")
-    ) {
+    if (url.includes("pin.it")) {
       try {
-        const redirectRes =
-          await axios.get(url, {
-            headers:
-              BROWSER_HEADERS,
-            maxRedirects: 5,
-            timeout: 10000,
-          });
+        const redirectRes = await axios.get(url, {
+          headers: BROWSER_HEADERS,
+          maxRedirects: 5,
+          timeout: 10000,
+        });
 
         targetUrl =
-          redirectRes.request?.res
-            ?.responseUrl || url;
+          redirectRes.request?.res?.responseUrl ||
+          redirectRes.config?.url ||
+          url;
       } catch {
-        // Continue with original URL
+        // Continue
       }
     }
 
-    const pinIdMatch =
-      targetUrl.match(
-        /\/pin\/(\d+)/
-      );
-
-    const pinId = pinIdMatch
-      ? pinIdMatch[1]
-      : null;
-
-    /* =====================================================
-       PIDGET
-    ===================================================== */
-
-    if (pinId) {
-      try {
-        const pidgetRes =
-          await axios.get(
-            `https://api.pinterest.com/v3/pidgets/pins/info/?pin_ids=${pinId}`,
-            {
-              headers:
-                BROWSER_HEADERS,
-              timeout: 10000,
-            }
-          );
-
-        const pinData =
-          pidgetRes.data?.data
-            ?.pins?.[0];
-
-        if (pinData) {
-          const title =
-            pinData.description ||
-            "Pinterest Media";
-
-          const imageUrl =
-            pinData.images?.orig
-              ?.url ||
-            pinData.images?.["736x"]
-              ?.url;
-
-          /*
-            Check Pinterest video
-          */
-
-          const videos =
-            pinData.videos
-              ?.video_list;
-
-          if (videos) {
-            const videoUrl =
-              videos.V_720P?.url ||
-              videos.V_EXP3?.url ||
-              videos.V_HLSV4?.url ||
-              Object.values(
-                videos
-              ).find(
-                (item) =>
-                  item?.url
-              )?.url;
-
-            if (videoUrl) {
-              return {
-                title: title.slice(
-                  0,
-                  70
-                ),
-                thumbnail:
-                  imageUrl ||
-                  null,
-                isPhoto: false,
-                formats: [
-                  {
-                    formatId:
-                      "pin-720",
-                    quality:
-                      "720p HD",
-                    height: 720,
-                    directUrl:
-                      videoUrl,
-                  },
-                ],
-              };
-            }
-          }
-
-          if (imageUrl) {
-            return {
-              title: title.slice(
-                0,
-                70
-              ),
-              thumbnail:
-                imageUrl,
-              url: imageUrl,
-              isPhoto: true,
-              formats: [],
-            };
-          }
-        }
-      } catch {
-        // Fallback below
+    const response = await axios.get(
+      targetUrl,
+      {
+        headers: BROWSER_HEADERS,
+        timeout: 15000,
+        maxRedirects: 5,
       }
-    }
+    );
 
-    /* =====================================================
-       HTML SCRAPER
-    ===================================================== */
+    const html = response.data;
+    const $ = cheerio.load(html);
 
-    const res =
-      await axios.get(
-        targetUrl,
-        {
-          headers:
-            BROWSER_HEADERS,
-          timeout: 15000,
-        }
-      );
+    let title =
+      $('meta[property="og:title"]').attr(
+        "content"
+      ) ||
+      "Pinterest Media";
 
-    const html =
-      res.data;
-
-    const $ =
-      cheerio.load(html);
+    let imageUrl =
+      $('meta[property="og:image"]').attr(
+        "content"
+      ) || null;
 
     let videoUrl = null;
 
-    let imageUrl =
-      $(
-        'meta[property="og:image"]'
-      ).attr("content");
-
-    let title =
-      $(
-        'meta[property="og:title"]'
-      ).attr("content") ||
-      "Pinterest Media";
-
     /* =====================================================
-       PWS DATA
+       PINTEREST INTERNAL DATA
     ===================================================== */
 
     const pwsData =
@@ -396,50 +277,45 @@ const scrapePinterest = async (url) => {
 
     if (pwsData) {
       try {
-        const json =
-          JSON.parse(
-            pwsData
-          );
+        const json = JSON.parse(pwsData);
 
         const pins =
-          json?.props
-            ?.initialReduxState
+          json?.props?.initialReduxState
             ?.pins || {};
 
-        const pinKey =
-          Object.keys(
-            pins
-          )[0];
+        const pinKeys =
+          Object.keys(pins);
 
         const pinObj =
-          pins[pinKey];
+          pins[pinKeys[0]];
 
         if (pinObj) {
           title =
             pinObj.title ||
             pinObj.grid_title ||
+            pinObj.description ||
             title;
 
           imageUrl =
-            pinObj.images
-              ?.orig?.url ||
+            pinObj.images?.orig?.url ||
+            pinObj.images?.["736x"]?.url ||
             imageUrl;
 
           const videos =
-            pinObj.videos
-              ?.video_list;
+            pinObj.videos?.video_list;
 
           if (videos) {
+            const videoItems =
+              Object.values(videos);
+
             videoUrl =
               videos.V_720P?.url ||
               videos.V_HLSV4?.url ||
               videos.V_EXP3?.url ||
-              Object.values(
-                videos
-              ).find(
-                (item) =>
-                  item?.url
-              )?.url;
+              videoItems.find(
+                (item) => item?.url
+              )?.url ||
+              null;
           }
         }
       } catch {
@@ -448,102 +324,85 @@ const scrapePinterest = async (url) => {
     }
 
     /* =====================================================
-       MP4 FALLBACK
+       SEARCH MP4
     ===================================================== */
 
     if (!videoUrl) {
-      const mp4Matches =
-        html.match(
-          /https:\/\/[^"'\s]+\.pinimg\.com\/videos\/[^"'\s]+\.mp4/g
-        );
+      const matches = html.match(
+        /https:\/\/[^"'\s]+\.pinimg\.com\/videos\/[^"'\s]+\.mp4/g
+      );
 
-      if (
-        mp4Matches &&
-        mp4Matches.length
-      ) {
+      if (matches?.length) {
         videoUrl =
-          mp4Matches.find(
-            (u) =>
-              u.includes(
-                "720p"
-              ) ||
-              u.includes(
-                "V_720P"
-              )
+          matches.find(
+            (item) =>
+              item.includes("720p") ||
+              item.includes("V_720P")
           ) ||
-          mp4Matches[0];
+          matches[0];
       }
     }
 
-    if (videoUrl) {
+    /* =====================================================
+       VIDEO
+    ===================================================== */
+
+    if (
+      videoUrl &&
+      validateUrl(videoUrl)
+    ) {
       return {
-        title:
-          title.slice(
-            0,
-            70
-          ),
-
-        thumbnail:
-          imageUrl || null,
-
+        title: cleanFileName(title),
+        thumbnail: imageUrl,
         isPhoto: false,
 
         formats: [
           {
-            formatId:
-              "pin-720",
-            quality:
-              "720p HD",
+            formatId: "pinterest-720",
+            quality: "720p HD",
             height: 720,
-            directUrl:
-              decodeMediaUrl(
-                videoUrl
-              ),
+            directUrl: videoUrl,
           },
         ],
       };
     }
 
-    if (imageUrl) {
+    /* =====================================================
+       PHOTO
+    ===================================================== */
+
+    if (
+      imageUrl &&
+      validateUrl(imageUrl)
+    ) {
       return {
-        title:
-          title.slice(
-            0,
-            70
-          ),
-
-        thumbnail:
-          imageUrl,
-
-        url:
-          imageUrl,
-
+        title: cleanFileName(title),
+        thumbnail: imageUrl,
+        url: imageUrl,
         isPhoto: true,
-
         formats: [],
       };
     }
-  } catch (err) {
-    logger?.warn?.(
-      `Pinterest scraper error: ${err.message}`
-    );
-  }
 
-  return null;
+    return null;
+  } catch (error) {
+    logger?.warn?.(
+      `Pinterest scraper error: ${error.message}`
+    );
+
+    return null;
+  }
 };
 
 /* =========================================================
-   2. INSTAGRAM ENGINE
+   INSTAGRAM ENGINE
 ========================================================= */
 
-const scrapeInstagram = async (
-  url
-) => {
+const scrapeInstagram = async (url) => {
   try {
-    const cleanUrl =
-      url
-        .split("?")[0]
-        .replace(/\/+$/, "");
+    const cleanUrl = url
+      .split("?")[0]
+      .replace(/\/+$/, "");
 
     let oembedData = null;
 
@@ -558,8 +417,7 @@ const scrapeInstagram = async (
             cleanUrl
           )}`,
           {
-            headers:
-              BROWSER_HEADERS,
+            headers: BROWSER_HEADERS,
             timeout: 10000,
           }
         );
@@ -571,66 +429,58 @@ const scrapeInstagram = async (
     }
 
     /* =====================================================
-       EMBED PAGE
+       PAGE
     ===================================================== */
 
     let html = "";
 
     try {
-      const embedUrl =
-        `${cleanUrl}/embed/captioned/`;
-
-      const res =
+      const response =
         await axios.get(
-          embedUrl,
+          `${cleanUrl}/embed/captioned/`,
           {
-            headers: {
-              ...BROWSER_HEADERS,
-              Referer:
-                "https://www.instagram.com/",
-            },
+            headers: BROWSER_HEADERS,
             timeout: 15000,
+            maxRedirects: 5,
           }
         );
 
-      html =
-        res.data;
+      html = response.data;
     } catch {
-      /*
-        Try original page
-      */
+      try {
+        const response =
+          await axios.get(
+            cleanUrl,
+            {
+              headers:
+                BROWSER_HEADERS,
+              timeout: 15000,
+              maxRedirects: 5,
+            }
+          );
 
-      const res =
-        await axios.get(
-          cleanUrl,
-          {
-            headers: {
-              ...BROWSER_HEADERS,
-              Referer:
-                "https://www.instagram.com/",
-            },
-            timeout: 15000,
-          }
-        );
-
-      html =
-        res.data;
+        html = response.data;
+      } catch {
+        return null;
+      }
     }
 
-    const $ =
-      cheerio.load(html);
+    const $ = cheerio.load(html);
 
     let videoUrl = null;
 
     let imageUrl =
       oembedData?.thumbnail_url ||
+      $('meta[property="og:image"]').attr(
+        "content"
+      ) ||
       null;
 
-    const caption =
+    let title =
       oembedData?.title ||
-      $("div.Caption")
-        .text()
-        .trim() ||
+      $('meta[property="og:title"]').attr(
+        "content"
+      ) ||
       "Instagram Media";
 
     /* =====================================================
@@ -640,42 +490,41 @@ const scrapeInstagram = async (
     const videoTag =
       $("video").attr("src");
 
-    if (videoTag) {
-      videoUrl =
-        decodeMediaUrl(
-          videoTag
-        );
+    if (
+      videoTag &&
+      validateUrl(videoTag)
+    ) {
+      videoUrl = videoTag;
     }
 
     /* =====================================================
-       VIDEO URL REGEX
+       VIDEO URL
     ===================================================== */
 
     if (!videoUrl) {
-      const videoMatches = [
-        html.match(
-          /"video_url":"([^"]+)"/i
-        ),
-        html.match(
-          /"playable_url":"([^"]+)"/i
-        ),
-        html.match(
-          /"video_versions":\s*\[\s*\{\s*"type":[^}]*"url":"([^"]+)"/i
-        ),
+      const patterns = [
+        /"video_url":"([^"]+)"/,
+        /"playable_url":"([^"]+)"/,
+        /"video_versions":\s*\[.*?"url":"([^"]+)"/,
       ];
 
-      for (
-        const match of videoMatches
-      ) {
-        if (
-          match &&
-          match[1]
-        ) {
-          videoUrl =
+      for (const pattern of patterns) {
+        const match =
+          html.match(pattern);
+
+        if (match?.[1]) {
+          const decoded =
             decodeMediaUrl(
               match[1]
             );
-          break;
+
+          if (
+            decoded &&
+            validateUrl(decoded)
+          ) {
+            videoUrl = decoded;
+            break;
+          }
         }
       }
     }
@@ -688,127 +537,112 @@ const scrapeInstagram = async (
       imageUrl =
         $("img.EmbeddedMediaImage")
           .attr("src") ||
-        $(
-          'meta[property="og:image"]'
-        ).attr("content");
+        $('meta[property="og:image"]')
+          .attr("content") ||
+        null;
     }
 
     if (!imageUrl) {
-      const imgMatch =
-        html.match(
-          /"display_url":"([^"]+)"/i
-        ) ||
-        html.match(
-          /"thumbnail_src":"([^"]+)"/i
-        );
+      const patterns = [
+        /"display_url":"([^"]+)"/,
+        /"thumbnail_src":"([^"]+)"/,
+      ];
 
-      if (
-        imgMatch &&
-        imgMatch[1]
-      ) {
-        imageUrl =
-          decodeMediaUrl(
-            imgMatch[1]
-          );
+      for (const pattern of patterns) {
+        const match =
+          html.match(pattern);
+
+        if (match?.[1]) {
+          const decoded =
+            decodeMediaUrl(
+              match[1]
+            );
+
+          if (
+            decoded &&
+            validateUrl(decoded)
+          ) {
+            imageUrl = decoded;
+            break;
+          }
+        }
       }
     }
 
     /* =====================================================
-       INSTAGRAM VIDEO
+       VIDEO
     ===================================================== */
 
     if (videoUrl) {
       return {
-        title:
-          caption.slice(
-            0,
-            70
-          ) ||
-          "Instagram Reel",
-
-        thumbnail:
-          imageUrl || null,
-
+        title: cleanFileName(title),
+        thumbnail: imageUrl,
         isPhoto: false,
 
         formats: [
           {
-            formatId:
-              "ig-720",
-            quality:
-              "720p HD",
+            formatId: "instagram-720",
+            quality: "720p HD",
             height: 720,
-            directUrl:
-              videoUrl,
+            directUrl: videoUrl,
           },
         ],
       };
     }
 
     /* =====================================================
-       INSTAGRAM PHOTO
+       PHOTO
     ===================================================== */
 
-    if (imageUrl) {
+    if (
+      imageUrl &&
+      validateUrl(imageUrl)
+    ) {
       return {
-        title:
-          caption.slice(
-            0,
-            70
-          ) ||
-          "Instagram Photo",
-
-        thumbnail:
-          imageUrl,
-
-        url:
-          imageUrl,
-
+        title: cleanFileName(title),
+        thumbnail: imageUrl,
+        url: imageUrl,
         isPhoto: true,
-
         formats: [],
       };
     }
-  } catch (err) {
-    logger?.warn?.(
-      `Instagram scraper error: ${err.message}`
-    );
-  }
 
-  return null;
+    return null;
+  } catch (error) {
+    logger?.warn?.(
+      `Instagram scraper error: ${error.message}`
+    );
+
+    return null;
+  }
 };
 
 /* =========================================================
-   3. FACEBOOK ENGINE
+   FACEBOOK ENGINE
 ========================================================= */
 
-const scrapeFacebook = async (
-  url
-) => {
+const scrapeFacebook = async (url) => {
   try {
-    const res =
-      await axios.get(
-        url,
-        {
-          headers: {
-            ...BROWSER_HEADERS,
+    const response =
+      await axios.get(url, {
+        headers: {
+          ...BROWSER_HEADERS,
 
-            "Sec-Fetch-Site":
-              "none",
+          "Sec-Fetch-Site":
+            "none",
 
-            "Sec-Fetch-Mode":
-              "navigate",
+          "Sec-Fetch-Mode":
+            "navigate",
 
-            "Sec-Fetch-Dest":
-              "document",
-          },
+          "Sec-Fetch-Dest":
+            "document",
+        },
 
-          timeout: 15000,
-        }
-      );
+        timeout: 15000,
+        maxRedirects: 5,
+      });
 
-    const html =
-      res.data;
+    const html = response.data;
 
     const $ =
       cheerio.load(html);
@@ -817,15 +651,13 @@ const scrapeFacebook = async (
     let sdUrl = null;
 
     const title =
-      $(
-        'meta[property="og:title"]'
-      ).attr("content") ||
+      $('meta[property="og:title"]')
+        .attr("content") ||
       "Facebook Video";
 
     const thumbnail =
-      $(
-        'meta[property="og:image"]'
-      ).attr("content") ||
+      $('meta[property="og:image"]')
+        .attr("content") ||
       null;
 
     /* =====================================================
@@ -852,118 +684,87 @@ const scrapeFacebook = async (
         /"playable_url":"([^"]+)"/
       );
 
-    if (
-      hdMatch &&
-      hdMatch[1]
-    ) {
+    if (hdMatch?.[1]) {
       hdUrl =
         decodeMediaUrl(
           hdMatch[1]
         );
     }
 
-    if (
-      sdMatch &&
-      sdMatch[1]
-    ) {
+    if (sdMatch?.[1]) {
       sdUrl =
         decodeMediaUrl(
           sdMatch[1]
         );
     }
 
-    /* =====================================================
-       OG VIDEO
-    ===================================================== */
-
     if (!sdUrl) {
       sdUrl =
-        $(
-          'meta[property="og:video"]'
-        ).attr("content") ||
-        $(
-          'meta[property="og:video:secure_url"]'
-        ).attr("content");
+        $('meta[property="og:video"]')
+          .attr("content") ||
+        $('meta[property="og:video:secure_url"]')
+          .attr("content") ||
+        null;
     }
 
+    const formats = [];
+
     /* =====================================================
-       FORMATS
+       720
     ===================================================== */
 
     if (
-      hdUrl ||
-      sdUrl
+      hdUrl &&
+      validateUrl(hdUrl)
     ) {
-      const formats = [];
+      formats.push({
+        formatId: "facebook-720",
+        quality: "720p HD",
+        height: 720,
+        directUrl: hdUrl,
+      });
+    }
 
-      /*
-        720
-      */
+    /* =====================================================
+       360
+    ===================================================== */
 
-      if (hdUrl) {
-        formats.push({
-          formatId:
-            "fb-hd",
+    if (
+      sdUrl &&
+      validateUrl(sdUrl)
+    ) {
+      formats.push({
+        formatId: "facebook-360",
+        quality: "360p SD",
+        height: 360,
+        directUrl: sdUrl,
+      });
+    }
 
-          quality:
-            "720p HD",
-
-          height: 720,
-
-          directUrl:
-            hdUrl,
-        });
-      }
-
-      /*
-        360
-      */
-
-      if (sdUrl) {
-        formats.push({
-          formatId:
-            "fb-sd",
-
-          quality:
-            "360p SD",
-
-          height: 360,
-
-          directUrl:
-            sdUrl,
-        });
-      }
-
+    if (formats.length) {
       return {
-        title:
-          title.slice(
-            0,
-            70
-          ),
-
+        title: cleanFileName(title),
         thumbnail,
-
         isPhoto: false,
-
         formats,
       };
     }
-  } catch (err) {
-    logger?.warn?.(
-      `Facebook scraper error: ${err.message}`
-    );
-  }
 
-  return null;
+    return null;
+  } catch (error) {
+    logger?.warn?.(
+      `Facebook scraper error: ${error.message}`
+    );
+
+    return null;
+  }
 };
 
 /* =========================================================
-   4. YOUTUBE ENGINE
+   YOUTUBE ENGINE
 ========================================================= */
 
-const scrapeYouTube = async (
-  url
-) => {
+const scrapeYouTube = async (url) => {
   try {
     const videoId =
       extractYouTubeId(url);
@@ -981,30 +782,26 @@ const scrapeYouTube = async (
     ===================================================== */
 
     try {
-      const oembedRes =
+      const response =
         await axios.get(
           `https://www.youtube.com/oembed?url=${encodeURIComponent(
             url
           )}&format=json`,
           {
-            headers:
-              BROWSER_HEADERS,
             timeout: 10000,
           }
         );
 
       title =
-        oembedRes.data?.title ||
+        response.data?.title ||
         title;
 
       thumbnail =
-        oembedRes.data
-          ?.thumbnail_url ||
+        response.data?.thumbnail_url ||
         thumbnail;
 
       uploader =
-        oembedRes.data
-          ?.author_name ||
+        response.data?.author_name ||
         uploader;
     } catch {
       if (videoId) {
@@ -1013,391 +810,702 @@ const scrapeYouTube = async (
       }
     }
 
-    /*
-      ONLY 360 AND 720
-    */
+    /* =====================================================
+       ONLY 360 + 720
+    ===================================================== */
 
     const formats = [
       {
-        formatId: "18",
+        formatId: "360",
         quality: "360p SD",
         height: 360,
       },
       {
-        formatId: "22",
+        formatId: "720",
         quality: "720p HD",
         height: 720,
       },
     ];
 
     return {
-      title,
-
+      title: cleanFileName(title),
       thumbnail,
-
       uploader,
-
       isPhoto: false,
-
       formats,
     };
-  } catch (err) {
+  } catch (error) {
     logger?.warn?.(
-      `YouTube scraper error: ${err.message}`
+      `YouTube scraper error: ${error.message}`
     );
-  }
 
-  return null;
+    return null;
+  }
 };
 
 /* =========================================================
    EXTRACT CONTROLLER
 ========================================================= */
 
-export const extractTool =
-  async (req, res) => {
-    try {
-      const { url } =
-        req.body || {};
+export const extractTool = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      url,
+      tool,
+    } = req.body || {};
 
-      if (
-        !url ||
-        !validateUrl(url)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Please enter a valid URL.",
-        });
-      }
-
-      const platform =
-        getPlatform(url);
-
-      if (
-        platform ===
-        "unknown"
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Unsupported platform URL.",
-        });
-      }
-
-      let parsedData =
-        null;
-
-      /* ===================================================
-         PLATFORM ENGINE
-      =================================================== */
-
-      if (
-        platform ===
-        "pinterest"
-      ) {
-        parsedData =
-          await scrapePinterest(
-            url
-          );
-      } else if (
-        platform ===
-        "instagram"
-      ) {
-        parsedData =
-          await scrapeInstagram(
-            url
-          );
-      } else if (
-        platform ===
-        "facebook"
-      ) {
-        parsedData =
-          await scrapeFacebook(
-            url
-          );
-      } else if (
-        platform ===
-        "youtube"
-      ) {
-        parsedData =
-          await scrapeYouTube(
-            url
-          );
-      }
-
-      /* ===================================================
-         SUCCESS
-      =================================================== */
-
-      if (parsedData) {
-        return res.status(200).json({
-          success: true,
-
-          data: {
-            id: crypto
-              .randomBytes(6)
-              .toString("hex"),
-
-            title:
-              parsedData.title,
-
-            thumbnail:
-              parsedData.thumbnail,
-
-            url:
-              parsedData.url ||
-              url,
-
-            duration: 0,
-
-            uploader:
-              parsedData.uploader ||
-              null,
-
-            platform,
-
-            isPhoto:
-              Boolean(
-                parsedData.isPhoto
-              ),
-
-            qualities:
-              parsedData.formats
-                ?.map(
-                  (f) =>
-                    Number(
-                      f.height
-                    )
-                )
-                .filter(
-                  Boolean
-                ) || [720, 360],
-
-            formats:
-              parsedData.formats ||
-              [],
-          },
-        });
-      }
-
-      /* ===================================================
-         EXTRACTION FAILED
-      =================================================== */
-
-      return res.status(422).json({
+    if (
+      !url ||
+      !validateUrl(url)
+    ) {
+      return res.status(400).json({
         success: false,
         message:
-          `Unable to extract ${platform} media. The content may be private, unavailable, or protected.`,
-      });
-    } catch (error) {
-      logger?.error?.(
-        `Extract global error: ${error.message}`
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Failed to extract media information.",
+          "Please enter a valid URL.",
       });
     }
-  };
 
-/* =========================================================
-   STREAM HELPER
-========================================================= */
+    const platform =
+      getPlatform(url);
 
-const streamRemoteFile = async ({
-  targetUrl,
-  res,
-  filename,
-  defaultContentType,
-  referer,
-}) => {
-  const headers = {
-    ...BROWSER_HEADERS,
-  };
+    if (
+      platform === "unknown"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Unsupported platform URL.",
+      });
+    }
 
-  if (referer) {
-    headers.Referer =
-      referer;
-  }
+    /* =====================================================
+       TOOL VALIDATION
+    ===================================================== */
 
-  const streamRes =
-    await axios({
-      method: "GET",
+    if (
+      tool &&
+      typeof tool === "string" &&
+      !tool.toLowerCase().includes(
+        platform
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          `Please enter a valid ${platform} URL.`,
+      });
+    }
 
-      url: targetUrl,
+    let parsedData = null;
 
-      responseType:
-        "stream",
+    /* =====================================================
+       PLATFORM ENGINE
+    ===================================================== */
 
-      timeout: 180000,
+    if (platform === "youtube") {
+      parsedData =
+        await scrapeYouTube(url);
+    }
 
-      headers,
+    if (platform === "facebook") {
+      parsedData =
+        await scrapeFacebook(url);
+    }
 
-      maxRedirects: 8,
+    if (platform === "instagram") {
+      parsedData =
+        await scrapeInstagram(url);
+    }
 
-      validateStatus: (status) =>
-        status >= 200 &&
-        status < 400,
+    if (platform === "pinterest") {
+      parsedData =
+        await scrapePinterest(url);
+    }
+
+    /* =====================================================
+       SUCCESS
+    ===================================================== */
+
+    if (parsedData) {
+      return res.status(200).json({
+        success: true,
+
+        data: {
+          id: crypto
+            .randomBytes(6)
+            .toString("hex"),
+
+          title:
+            parsedData.title ||
+            `${platform.toUpperCase()} Media`,
+
+          thumbnail:
+            parsedData.thumbnail ||
+            null,
+
+          url:
+            parsedData.url ||
+            url,
+
+          duration: 0,
+
+          uploader:
+            parsedData.uploader ||
+            null,
+
+          platform,
+
+          isPhoto:
+            Boolean(
+              parsedData.isPhoto
+            ),
+
+          qualities:
+            parsedData.formats
+              ?.map(
+                (format) =>
+                  Number(format.height)
+              )
+              .filter(Boolean) ||
+            [],
+
+          formats:
+            parsedData.formats ||
+            [],
+        },
+      });
+    }
+
+    return res.status(422).json({
+      success: false,
+
+      message:
+        `Unable to extract ${platform} media. ` +
+        "The media may be private, unavailable, or protected.",
     });
-
-  const contentType =
-    streamRes.headers[
-      "content-type"
-    ] ||
-    defaultContentType ||
-    "application/octet-stream";
-
-  res.status(200);
-
-  res.setHeader(
-    "Content-Type",
-    contentType
-  );
-
-  if (
-    streamRes.headers[
-      "content-length"
-    ]
-  ) {
-    res.setHeader(
-      "Content-Length",
-      streamRes.headers[
-        "content-length"
-      ]
+  } catch (error) {
+    logger?.error?.(
+      `Extract global error: ${error.message}`
     );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to extract media information.",
+    });
   }
-
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(
-      filename
-    )}"`
-  );
-
-  res.setHeader(
-    "Cache-Control",
-    "no-store"
-  );
-
-  return streamRes.data.pipe(
-    res
-  );
 };
 
 /* =========================================================
-   YOUTUBE INVIDIOUS DOWNLOAD
+   YOUTUBE DOWNLOAD
+   youtube-dl-exec
 ========================================================= */
 
-const downloadYouTube =
+const downloadYouTubeWithYtDlp =
   async ({
-    sourceUrl,
+    url,
     quality,
     title,
-    res,
   }) => {
-    const videoId =
-      extractYouTubeId(
-        sourceUrl
+    ensureTempDirectory();
+
+    const id =
+      crypto
+        .randomBytes(12)
+        .toString("hex");
+
+    const outputPath =
+      path.join(
+        TEMP_DIR,
+        `${id}.mp4`
       );
 
-    if (!videoId) {
-      throw new Error(
-        "Unable to detect YouTube video ID."
+    const normalizedQuality =
+      normalizeQuality(
+        quality
       );
-    }
 
-    /*
-      ONLY 360 OR 720
-    */
+    /* =====================================================
+       FORMAT
 
-    const requestedQuality =
-      Number(quality) === 360
-        ? 360
-        : 720;
+       360:
+       best video <=360 + best audio
 
-    /*
-      itag:
-      18 = 360p MP4
-      22 = 720p MP4
-    */
+       720:
+       best video <=720 + best audio
 
-    const preferredItag =
-      requestedQuality === 360
-        ? "18"
-        : "22";
+       If separate streams are unavailable,
+       fallback to progressive MP4.
+    ===================================================== */
 
-    /*
-      Try selected quality first.
-    */
+    const format =
+      normalizedQuality === 360
+        ? "bestvideo[height<=360]+bestaudio/best[height<=360]/best[ext=mp4][height<=360]"
+        : "bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4][height<=720]";
 
-    const itags =
-      requestedQuality === 720
-        ? ["22", "18"]
-        : ["18"];
+    try {
+      await youtubedl(
+        url,
+        {
+          output: outputPath,
 
-    let lastError = null;
+          format,
 
-    for (
-      const instance of
-        INVIDIOUS_INSTANCES
-    ) {
-      for (
-        const itag of itags
+          mergeOutputFormat:
+            "mp4",
+
+          noPlaylist: true,
+
+          noWarnings: true,
+
+          noCheckCertificates:
+            true,
+
+          restrictFilenames:
+            true,
+
+          retries: 3,
+
+          fragmentRetries: 3,
+
+          concurrentFragments: 4,
+
+          quiet: true,
+        }
+      );
+
+      if (
+        !fs.existsSync(
+          outputPath
+        )
       ) {
-        try {
-          /*
-            Get actual video stream
-          */
+        throw new Error(
+          "youtube-dl-exec did not create the output file."
+        );
+      }
 
-          const streamUrl =
-            `${instance}/latest_version?id=${encodeURIComponent(
-              videoId
-            )}&itag=${itag}`;
+      const stats =
+        await fs.promises.stat(
+          outputPath
+        );
 
-          const filename =
-            `${cleanFileName(
-              title
-            ) || "youtube-video"}.mp4`;
+      if (
+        !stats.size
+      ) {
+        throw new Error(
+          "Downloaded YouTube file is empty."
+        );
+      }
 
-          await streamRemoteFile({
-            targetUrl:
-              streamUrl,
+      return {
+        outputPath,
 
-            res,
+        size:
+          stats.size,
 
-            filename,
+        quality:
+          normalizedQuality,
 
-            defaultContentType:
-              "video/mp4",
-
-            referer:
-              "https://www.youtube.com/",
-          });
-
-          return true;
-        } catch (error) {
-          lastError = error;
-
-          logger?.warn?.(
-            `YouTube Invidious ${instance} itag ${itag} failed: ${error.message}`
+        filename:
+          `${cleanFileName(
+            title ||
+              "youtube-video"
+          )}.mp4`,
+      };
+    } catch (error) {
+      try {
+        if (
+          fs.existsSync(
+            outputPath
+          )
+        ) {
+          await fs.promises.unlink(
+            outputPath
           );
         }
+      } catch {
+        // Ignore
       }
+
+      throw error;
+    }
+  };
+
+/* =========================================================
+   STREAM LOCAL FILE
+========================================================= */
+
+const streamLocalFile =
+  async (
+    res,
+    filePath,
+    filename,
+    contentType
+  ) => {
+    try {
+      const stats =
+        await fs.promises.stat(
+          filePath
+        );
+
+      res.status(200);
+
+      res.setHeader(
+        "Content-Type",
+        contentType
+      );
+
+      res.setHeader(
+        "Content-Length",
+        stats.size
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${encodeURIComponent(
+          filename
+        )}"`
+      );
+
+      res.setHeader(
+        "Cache-Control",
+        "no-store"
+      );
+
+      const stream =
+        fs.createReadStream(
+          filePath
+        );
+
+      stream.on(
+        "error",
+        async (error) => {
+          logger?.error?.(
+            `File stream error: ${error.message}`
+          );
+
+          try {
+            if (
+              fs.existsSync(
+                filePath
+              )
+            ) {
+              await fs.promises.unlink(
+                filePath
+              );
+            }
+          } catch {
+            // Ignore
+          }
+
+          if (
+            !res.headersSent
+          ) {
+            res.status(500).json({
+              success: false,
+              message:
+                "Unable to stream downloaded file.",
+            });
+          }
+        }
+      );
+
+      stream.on(
+        "close",
+        async () => {
+          try {
+            if (
+              fs.existsSync(
+                filePath
+              )
+            ) {
+              await fs.promises.unlink(
+                filePath
+              );
+            }
+          } catch {
+            // Ignore
+          }
+        }
+      );
+
+      stream.pipe(res);
+    } catch (error) {
+      try {
+        if (
+          fs.existsSync(
+            filePath
+          )
+        ) {
+          await fs.promises.unlink(
+            filePath
+          );
+        }
+      } catch {
+        // Ignore
+      }
+
+      throw error;
+    }
+  };
+
+/* =========================================================
+   GET CONTENT TYPE
+========================================================= */
+
+const getMediaExtension =
+  (contentType, isPhoto) => {
+    const type =
+      String(
+        contentType || ""
+      ).toLowerCase();
+
+    if (
+      type.includes("png")
+    ) {
+      return ".png";
+    }
+
+    if (
+      type.includes("webp")
+    ) {
+      return ".webp";
+    }
+
+    if (
+      type.includes("gif")
+    ) {
+      return ".gif";
+    }
+
+    if (
+      type.includes("jpeg") ||
+      type.includes("jpg")
+    ) {
+      return ".jpg";
+    }
+
+    if (
+      type.includes("webm")
+    ) {
+      return ".webm";
+    }
+
+    if (
+      type.includes("mkv")
+    ) {
+      return ".mkv";
+    }
+
+    if (
+      type.includes("mpeg")
+    ) {
+      return ".mpeg";
+    }
+
+    return isPhoto
+      ? ".jpg"
+      : ".mp4";
+  };
+
+/* =========================================================
+   DIRECT MEDIA STREAM
+========================================================= */
+
+const streamDirectMedia =
+  async ({
+    res,
+    directUrl,
+    filename,
+    isPhoto = false,
+  }) => {
+    if (
+      !directUrl ||
+      !validateUrl(directUrl)
+    ) {
+      throw new Error(
+        "Direct media URL is invalid."
+      );
+    }
+
+    const response =
+      await axios({
+        method: "GET",
+
+        url: directUrl,
+
+        responseType: "stream",
+
+        timeout: 120000,
+
+        maxRedirects: 5,
+
+        headers:
+          BROWSER_HEADERS,
+
+        validateStatus:
+          (status) =>
+            status >= 200 &&
+            status < 300,
+      });
+
+    const contentType =
+      response.headers[
+        "content-type"
+      ] ||
+      (isPhoto
+        ? "image/jpeg"
+        : "video/mp4");
+
+    /*
+     * IMPORTANT:
+     *
+     * If the server sends HTML instead
+     * of media, DO NOT download it.
+     */
+
+    if (
+      contentType
+        .toLowerCase()
+        .includes("text/html")
+    ) {
+      response.data.destroy();
+
+      throw new Error(
+        "The supplied URL returned a webpage instead of media."
+      );
+    }
+
+    const extension =
+      getMediaExtension(
+        contentType,
+        isPhoto
+      );
+
+    const finalFilename =
+      filename.endsWith(
+        extension
+      )
+        ? filename
+        : `${filename}${extension}`;
+
+    res.status(200);
+
+    res.setHeader(
+      "Content-Type",
+      contentType
+    );
+
+    if (
+      response.headers[
+        "content-length"
+      ]
+    ) {
+      res.setHeader(
+        "Content-Length",
+        response.headers[
+          "content-length"
+        ]
+      );
+    }
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(
+        finalFilename
+      )}"`
+    );
+
+    res.setHeader(
+      "Cache-Control",
+      "no-store"
+    );
+
+    response.data.on(
+      "error",
+      (error) => {
+        logger?.error?.(
+          `Direct media stream error: ${error.message}`
+        );
+      }
+    );
+
+    return response.data.pipe(
+      res
+    );
+  };
+
+/* =========================================================
+   GET DIRECT FORMAT
+========================================================= */
+
+const getSelectedFormat =
+  (
+    formats = [],
+    quality
+  ) => {
+    const normalized =
+      normalizeQuality(
+        quality
+      );
+
+    /*
+     * First exact quality
+     */
+
+    const exact =
+      formats.find(
+        (format) =>
+          Number(
+            format.height
+          ) === normalized &&
+          validateUrl(
+            format.directUrl
+          )
+      );
+
+    if (exact) {
+      return exact;
     }
 
     /*
-      No external fallback.
-      y2meta removed.
-    */
+     * For 720 request,
+     * use highest available <=720.
+     */
 
-    throw (
-      lastError ||
-      new Error(
-        `Unable to download YouTube video in ${requestedQuality}p.`
-      )
+    const lower =
+      formats
+        .filter(
+          (format) =>
+            Number(
+              format.height
+            ) <= normalized &&
+            validateUrl(
+              format.directUrl
+            )
+        )
+        .sort(
+          (a, b) =>
+            Number(b.height) -
+            Number(a.height)
+        );
+
+    if (lower.length) {
+      return lower[0];
+    }
+
+    /*
+     * Last valid format
+     */
+
+    return formats.find(
+      (format) =>
+        validateUrl(
+          format.directUrl
+        )
     );
   };
 
@@ -1406,7 +1514,10 @@ const downloadYouTube =
 ========================================================= */
 
 export const downloadTool =
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
       const {
         url,
@@ -1414,16 +1525,21 @@ export const downloadTool =
         isPhoto,
         directUrl,
         title,
+        formats,
       } = req.body || {};
 
       const sourceUrl =
-        url?.trim();
+        typeof url === "string"
+          ? url.trim()
+          : "";
+
+      /* =====================================================
+         VALIDATE SOURCE URL
+      ===================================================== */
 
       if (
         !sourceUrl ||
-        !validateUrl(
-          sourceUrl
-        )
+        !validateUrl(sourceUrl)
       ) {
         return res.status(400).json({
           success: false,
@@ -1438,8 +1554,7 @@ export const downloadTool =
         );
 
       if (
-        platform ===
-        "unknown"
+        platform === "unknown"
       ) {
         return res.status(400).json({
           success: false,
@@ -1448,259 +1563,305 @@ export const downloadTool =
         });
       }
 
-      ensureTempDirectory();
+      const normalizedQuality =
+        normalizeQuality(
+          quality
+        );
 
-      const cleanBaseTitle =
+      const cleanTitle =
         cleanFileName(
           title ||
             `${platform}-media`
         );
 
       /* =====================================================
-         PHOTO DOWNLOAD
+         YOUTUBE
+         ALWAYS USE youtube-dl-exec
       ===================================================== */
 
       if (
-        Boolean(isPhoto)
+        platform === "youtube"
       ) {
-        const targetPhotoUrl =
-          directUrl;
+        try {
+          const result =
+            await downloadYouTubeWithYtDlp(
+              {
+                url: sourceUrl,
 
-        if (
-          !targetPhotoUrl ||
-          !validateUrl(
-            targetPhotoUrl
-          )
-        ) {
+                quality:
+                  normalizedQuality,
+
+                title:
+                  cleanTitle,
+              }
+            );
+
+          return await streamLocalFile(
+            res,
+
+            result.outputPath,
+
+            result.filename,
+
+            "video/mp4"
+          );
+        } catch (error) {
+          logger?.error?.(
+            `YouTube youtube-dl-exec error: ${error.message}`
+          );
+
           return res.status(422).json({
             success: false,
+
             message:
-              "Photo source URL is unavailable.",
-          });
-        }
+              "YouTube video could not be downloaded. Please make sure the video is public and try again.",
 
-        try {
-          let extension =
-            ".jpg";
-
-          const lowerUrl =
-            targetPhotoUrl
-              .toLowerCase();
-
-          if (
-            lowerUrl.includes(
-              ".png"
-            )
-          ) {
-            extension =
-              ".png";
-          } else if (
-            lowerUrl.includes(
-              ".webp"
-            )
-          ) {
-            extension =
-              ".webp";
-          }
-
-          const filename =
-            `${cleanBaseTitle}${extension}`;
-
-          await streamRemoteFile({
-            targetUrl:
-              targetPhotoUrl,
-
-            res,
-
-            filename,
-
-            defaultContentType:
-              "image/jpeg",
-
-            referer:
-              platform ===
-              "instagram"
-                ? "https://www.instagram.com/"
-                : platform ===
-                  "pinterest"
-                ? "https://www.pinterest.com/"
+            error:
+              process.env.NODE_ENV ===
+              "development"
+                ? error.message
                 : undefined,
           });
-
-          return;
-        } catch (photoError) {
-          logger?.warn?.(
-            `Photo direct stream failed: ${photoError.message}`
-          );
-
-          return res.status(502).json({
-            success: false,
-            message:
-              "Unable to download the photo. The media URL may have expired.",
-          });
         }
       }
 
       /* =====================================================
-         YOUTUBE
+         NON-YOUTUBE MEDIA
       ===================================================== */
 
-      if (
-        platform ===
-        "youtube"
-      ) {
-        try {
-          await downloadYouTube({
-            sourceUrl,
+      /*
+       * IMPORTANT:
+       *
+       * Do NOT download sourceUrl directly.
+       *
+       * sourceUrl is usually a webpage:
+       *
+       * https://facebook.com/...
+       * https://instagram.com/...
+       * https://pinterest.com/...
+       *
+       * We only download directUrl.
+       */
 
-            quality:
-              Number(quality) ===
-              360
-                ? 360
-                : 720,
-
-            title:
-              cleanBaseTitle,
-
-            res,
-          });
-
-          return;
-        } catch (youtubeError) {
-          logger?.error?.(
-            `YouTube download failed: ${youtubeError.message}`
-          );
-
-          return res.status(502).json({
-            success: false,
-            message:
-              "YouTube download is currently unavailable for this video. Please try 360p or try again later.",
-          });
-        }
-      }
-
-      /* =====================================================
-         INSTAGRAM / FACEBOOK / PINTEREST
-      ===================================================== */
-
-      const targetDirectUrl =
+      let selectedDirectUrl =
         directUrl;
 
+      let selectedIsPhoto =
+        Boolean(isPhoto);
+
+      /* =====================================================
+         USE DIRECT URL FROM FRONTEND
+      ===================================================== */
+
       if (
-        targetDirectUrl &&
+        selectedDirectUrl &&
         validateUrl(
-          targetDirectUrl
+          selectedDirectUrl
         )
       ) {
         try {
-          let extension =
-            ".mp4";
+          return await streamDirectMedia(
+            {
+              res,
 
-          const lowerUrl =
-            targetDirectUrl
-              .toLowerCase();
+              directUrl:
+                selectedDirectUrl,
 
-          if (
-            lowerUrl.includes(
-              ".jpg"
-            ) ||
-            lowerUrl.includes(
-              ".jpeg"
-            )
-          ) {
-            extension =
-              ".jpg";
-          } else if (
-            lowerUrl.includes(
-              ".png"
-            )
-          ) {
-            extension =
-              ".png";
-          } else if (
-            lowerUrl.includes(
-              ".webp"
-            )
-          ) {
-            extension =
-              ".webp";
-          }
+              filename:
+                cleanTitle,
 
-          const filename =
-            `${cleanBaseTitle}${extension}`;
-
-          let referer;
-
-          if (
-            platform ===
-            "instagram"
-          ) {
-            referer =
-              "https://www.instagram.com/";
-          } else if (
-            platform ===
-            "facebook"
-          ) {
-            referer =
-              "https://www.facebook.com/";
-          } else if (
-            platform ===
-            "pinterest"
-          ) {
-            referer =
-              "https://www.pinterest.com/";
-          }
-
-          await streamRemoteFile({
-            targetUrl:
-              targetDirectUrl,
-
-            res,
-
-            filename,
-
-            defaultContentType:
-              "video/mp4",
-
-            referer,
-          });
-
-          return;
-        } catch (streamError) {
-          logger?.warn?.(
-            `${platform} direct stream failed: ${streamError.message}`
+              isPhoto:
+                selectedIsPhoto,
+            }
           );
-
-          return res.status(502).json({
-            success: false,
-            message:
-              `${platform} media download failed. The media URL may have expired or the post may not be publicly accessible.`,
-          });
+        } catch (error) {
+          logger?.warn?.(
+            `Frontend direct media failed: ${error.message}`
+          );
         }
       }
 
       /* =====================================================
-         NO DIRECT URL
+         RE-EXTRACT PLATFORM
+      ===================================================== */
+
+      let mediaData = null;
+
+      if (
+        platform === "facebook"
+      ) {
+        mediaData =
+          await scrapeFacebook(
+            sourceUrl
+          );
+      }
+
+      if (
+        platform === "instagram"
+      ) {
+        mediaData =
+          await scrapeInstagram(
+            sourceUrl
+          );
+      }
+
+      if (
+        platform === "pinterest"
+      ) {
+        mediaData =
+          await scrapePinterest(
+            sourceUrl
+          );
+      }
+
+      /* =====================================================
+         NO MEDIA FOUND
+      ===================================================== */
+
+      if (!mediaData) {
+        return res.status(422).json({
+          success: false,
+
+          message:
+            `${platform} media could not be extracted. ` +
+            "The media may be private, unavailable, or protected.",
+        });
+      }
+
+      selectedIsPhoto =
+        Boolean(
+          mediaData.isPhoto
+        );
+
+      /* =====================================================
+         PHOTO
+      ===================================================== */
+
+      if (
+        selectedIsPhoto &&
+        mediaData.url &&
+        validateUrl(
+          mediaData.url
+        )
+      ) {
+        try {
+          return await streamDirectMedia(
+            {
+              res,
+
+              directUrl:
+                mediaData.url,
+
+              filename:
+                cleanTitle,
+
+              isPhoto: true,
+            }
+          );
+        } catch (error) {
+          logger?.error?.(
+            `Photo download error: ${error.message}`
+          );
+        }
+      }
+
+      /* =====================================================
+         VIDEO FORMAT
+      ===================================================== */
+
+      let selectedFormat =
+        null;
+
+      /*
+       * Prefer formats sent by frontend.
+       */
+
+      if (
+        Array.isArray(
+          formats
+        ) &&
+        formats.length
+      ) {
+        selectedFormat =
+          getSelectedFormat(
+            formats,
+            normalizedQuality
+          );
+      }
+
+      /*
+       * Otherwise use newly extracted formats.
+       */
+
+      if (
+        !selectedFormat
+      ) {
+        selectedFormat =
+          getSelectedFormat(
+            mediaData.formats ||
+              [],
+            normalizedQuality
+          );
+      }
+
+      /* =====================================================
+         DIRECT VIDEO URL
+      ===================================================== */
+
+      if (
+        selectedFormat?.directUrl &&
+        validateUrl(
+          selectedFormat.directUrl
+        )
+      ) {
+        try {
+          return await streamDirectMedia(
+            {
+              res,
+
+              directUrl:
+                selectedFormat.directUrl,
+
+              filename:
+                cleanTitle,
+
+              isPhoto: false,
+            }
+          );
+        } catch (error) {
+          logger?.error?.(
+            `${platform} video download error: ${error.message}`
+          );
+        }
+      }
+
+      /* =====================================================
+         NEVER DOWNLOAD WEB PAGE
       ===================================================== */
 
       return res.status(422).json({
         success: false,
+
         message:
-          `No downloadable ${platform} media URL was found.`,
+          `${platform} direct video file could not be found. ` +
+          "The supplied page does not contain an accessible video file.",
       });
     } catch (error) {
       logger?.error?.(
-        `DOWNLOAD ERROR: ${error.message}`
+        `DOWNLOAD GLOBAL ERROR: ${error.message}`
       );
 
       if (
-        !res.headersSent
+        res.headersSent
       ) {
-        return res.status(500).json({
-          success: false,
-          message:
-            "Failed to download media. Please try again.",
-        });
+        return;
       }
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to download media. Please try again.",
+      });
     }
   };
